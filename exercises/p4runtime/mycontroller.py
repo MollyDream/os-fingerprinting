@@ -75,7 +75,7 @@ def writeTunnelRules(p4info_helper, ingress_sw, egress_sw, tunnel_id,
         },
         action_name="MyIngress.myTunnel_forward",
         action_params={
-            "port": SWITCH_TO_SWITCH_PORT,
+            "port": SWITCH_TO_SWITCH_PORT
         })
     ingress_sw.WriteTableEntry(table_entry)
     print "Installed transit tunnel rule on %s" % ingress_sw.name
@@ -110,9 +110,37 @@ def readTableRules(p4info_helper, sw):
     for response in sw.ReadTableEntries():
         for entity in response.entities:
             entry = entity.table_entry
-            # TODO For extra credit, you can use the p4info_helper to translate
-            #      the IDs in the entry to names
-            print entry
+            
+            # Print table name instead of table id
+            table_name = p4info_helper.get_tables_name(entry.table_id)
+            print "table_name: %s" % table_name
+
+            # Print match
+            match_string = "match {\n"
+            for m in entry.match:
+                field_name = p4info_helper.get_match_field_name(table_name, m.field_id)
+                match_string += "  field_name: %s\n" % field_name
+                match_string += "  %s {\n" % m.WhichOneof("field_match_type")
+                match_string += "    value: %r\n" % (p4info_helper.get_match_field_value(m),)
+                match_string += "  }\n"
+            match_string += "}"
+            print match_string
+
+            # Print action
+            action_string = "action {\n"
+            action_string += "  action {\n"
+            action = entry.action.action
+            action_name = p4info_helper.get_actions_name(action.action_id)
+            action_string += "    action_name: %s\n" % action_name
+            for p in action.params:
+                action_string += "    params {\n"
+                action_string += "      param_name: %s\n" % p4info_helper.get_action_param_name(action_name, p.param_id)
+                action_string += "      value: %r\n" % p.value
+                action_string += "    }\n"
+            action_string += "  }\n"
+            action_string += "}"
+            print action_string
+            
             print '-----'
 
 
