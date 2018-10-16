@@ -49,14 +49,24 @@ header tcp_t {
     bit<16> urgentPtr;
 }
 
+header tcp_options_t {
+    varbit<320> options;
+}
+
+header p0f_t {
+    bit<4> ver;
+}
+
 struct metadata {
     /* empty */
 }
 
 struct headers {
-    ethernet_t   ethernet;
-    ipv4_t       ipv4;
-    tcp_t        tcp;
+    ethernet_t    ethernet;
+    ipv4_t        ipv4;
+    tcp_t         tcp;
+    tcp_options_t tcp_options;
+    p0f_t         p0f;
 }
 
 /*************************************************************************
@@ -67,6 +77,7 @@ parser MyParser(packet_in packet,
                 out headers hdr,
                 inout metadata meta,
                 inout standard_metadata_t standard_metadata) {
+    bit<9> tcp_options_bytes;
 
     state start {
         transition parse_ethernet;
@@ -90,7 +101,10 @@ parser MyParser(packet_in packet,
 
     state parse_tcp {
 	packet.extract(hdr.tcp);
-	/* TODO: add tcp option parser */
+	/* Data offset field stores total size of TCP header in 4B   */
+	/* words. 5 -> 20 bytes == length of options-less TCP header */
+	tcp_options_bytes = 4 * (bit<9>)(hdr.tcp.dataOffset - 5);
+	packet.extract(hdr.tcp_options, (bit<32>) (8 * tcp_options_bytes));
 	transition accept;
     }
 }
@@ -151,7 +165,12 @@ control MyIngress(inout headers hdr,
 control MyEgress(inout headers hdr,
                  inout metadata meta,
                  inout standard_metadata_t standard_metadata) {
-    apply {  }
+    apply {
+	if (standard_metadata.instance_type == 1) {
+	    hdr.p0f.setValid();
+	    hdr.p0f.ver = 4;
+	}
+    }
 }
 
 /*************************************************************************
@@ -187,6 +206,9 @@ control MyDeparser(packet_out packet, in headers hdr) {
     apply {
         packet.emit(hdr.ethernet);
 	packet.emit(hdr.ipv4);
+	packet.emit(hdr.tcp);
+	packet.emit(hdr.tcp_options);
+	packet.emit(hdr.p0f);
     }
 }
 
