@@ -35,6 +35,10 @@ header ipv4_t {
     ip4Addr_t dstAddr;
 }
 
+header ipv4_options_t {
+    varbit<320> options;
+}
+
 header tcp_t {
     bit<16> srcPort;
     bit<16> dstPort;
@@ -55,6 +59,7 @@ header tcp_options_t {
 
 header p0f_t {
     bit<4> ver;
+    bit<8> ttl;
 }
 
 struct metadata {
@@ -62,11 +67,12 @@ struct metadata {
 }
 
 struct headers {
-    ethernet_t    ethernet;
-    ipv4_t        ipv4;
-    tcp_t         tcp;
-    tcp_options_t tcp_options;
-    p0f_t         p0f;
+    ethernet_t     ethernet;
+    ipv4_t         ipv4;
+    ipv4_options_t ipv4_options;
+    tcp_t          tcp;
+    tcp_options_t  tcp_options;
+    p0f_t          p0f;
 }
 
 /*************************************************************************
@@ -77,6 +83,7 @@ parser MyParser(packet_in packet,
                 out headers hdr,
                 inout metadata meta,
                 inout standard_metadata_t standard_metadata) {
+    bit<9> ipv4_options_bytes;
     bit<9> tcp_options_bytes;
 
     state start {
@@ -93,6 +100,8 @@ parser MyParser(packet_in packet,
 
     state parse_ipv4 {
 	packet.extract(hdr.ipv4);
+	ipv4_options_bytes = 4 * (bit<9>)(hdr.ipv4.ihl - 5);
+	packet.extract(hdr.ipv4_options, (bit<32>) (8 * ipv4_options_bytes));
 	transition select(hdr.ipv4.protocol) {
 	    TYPE_TCP: parse_tcp;
 	    default: accept;
@@ -168,7 +177,8 @@ control MyEgress(inout headers hdr,
     apply {
 	if (standard_metadata.instance_type == 1) {
 	    hdr.p0f.setValid();
-	    hdr.p0f.ver = 4;
+	    hdr.p0f.ver = hdr.ipv4.version;
+	    hdr.p0f.ttl = hdr.ipv4.ttl;
 	}
     }
 }
@@ -206,6 +216,7 @@ control MyDeparser(packet_out packet, in headers hdr) {
     apply {
         packet.emit(hdr.ethernet);
 	packet.emit(hdr.ipv4);
+	packet.emit(hdr.ipv4_options);
 	packet.emit(hdr.tcp);
 	packet.emit(hdr.tcp_options);
 	packet.emit(hdr.p0f);
