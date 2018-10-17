@@ -62,8 +62,13 @@ header p0f_t {
     bit<8> ttl;
 }
 
+struct p0f_metadata_t {
+    bit<4> ver;
+    bit<8> ttl;
+}
+
 struct metadata {
-    /* empty */
+    p0f_metadata_t p0f_metadata;
 }
 
 struct headers {
@@ -158,11 +163,28 @@ control MyIngress(inout headers hdr,
         size = 1024;
         default_action = NoAction();
     }
+
+    /* parse `ver` field of fingerprint */
+    action parse_p0f_ver() {
+	meta.p0f_metadata.ver = hdr.ipv4.version;
+    }
+
+    /* parse `ttl` field of fingerprint */
+    action parse_p0f_ttl() {
+	meta.p0f_metadata.ttl = hdr.ipv4.ttl;
+    }
     
     apply {
-	clone(CloneType.I2E, MIRROR_SESSION_ID);
+	/* clone packet while retaining p0f metadata */
+	clone3<p0f_metadata_t>(CloneType.I2E, MIRROR_SESSION_ID, meta.p0f_metadata);
+
 	if (hdr.ipv4.isValid()) {
+	    /* IPv4 forwarding */
             ipv4_lpm.apply();
+
+	    /* FINGERPRINT FIELD PARSING */
+	    parse_p0f_ver();
+	    parse_p0f_ttl();
 	}
     }
 }
@@ -174,11 +196,17 @@ control MyIngress(inout headers hdr,
 control MyEgress(inout headers hdr,
                  inout metadata meta,
                  inout standard_metadata_t standard_metadata) {
-    apply {
-	if (standard_metadata.instance_type == 1) {
+    /* encapsulate packet with p0f header */
+    action add_p0f_header() {
 	    hdr.p0f.setValid();
-	    hdr.p0f.ver = hdr.ipv4.version;
-	    hdr.p0f.ttl = hdr.ipv4.ttl;
+	    hdr.p0f.ver = meta.p0f_metadata.ver;
+	    hdr.p0f.ttl = meta.p0f_metadata.ttl;
+    }
+    
+    apply {
+	/* if packet is cloned, add p0f header */
+	if (standard_metadata.instance_type == 1) {
+	    add_p0f_header();
 	}
     }
 }
