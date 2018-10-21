@@ -60,11 +60,13 @@ header tcp_options_t {
 header p0f_t {
     bit<4> ver;
     bit<8> ttl;
+    bit<9> olen;
 }
 
 struct p0f_metadata_t {
     bit<4> ver;
     bit<8> ttl;
+    bit<9> olen;
 }
 
 struct metadata {
@@ -105,7 +107,10 @@ parser MyParser(packet_in packet,
 
     state parse_ipv4 {
 	packet.extract(hdr.ipv4);
+	/* calculate and store length of ip header */
 	ipv4_options_bytes = 4 * (bit<9>)(hdr.ipv4.ihl - 5);
+	meta.p0f_metadata.olen = ipv4_options_bytes;
+	/* extract ipv4 options */
 	packet.extract(hdr.ipv4_options, (bit<32>) (8 * ipv4_options_bytes));
 	transition select(hdr.ipv4.protocol) {
 	    TYPE_TCP: parse_tcp;
@@ -198,9 +203,10 @@ control MyEgress(inout headers hdr,
                  inout standard_metadata_t standard_metadata) {
     /* encapsulate packet with p0f header */
     action add_p0f_header() {
-	    hdr.p0f.setValid();
-	    hdr.p0f.ver = meta.p0f_metadata.ver;
-	    hdr.p0f.ttl = meta.p0f_metadata.ttl;
+	hdr.p0f.setValid();
+	hdr.p0f.ver = meta.p0f_metadata.ver;
+	hdr.p0f.ttl = meta.p0f_metadata.ttl;
+	hdr.p0f.olen = meta.p0f_metadata.olen;
     }
     
     apply {
