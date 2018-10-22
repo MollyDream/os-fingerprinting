@@ -41,6 +41,40 @@
         "dstAddr": "00:00:00:03:03:00",
         "port": 3
       }
+    },
+    {
+      "table": "MyIngress.result_match",
+      "match": {
+	"meta.p0f_metadata.ttl": [0, 63],
+	"meta.p0f_metadata.olen": 0
+      },
+      "action_name": "MyIngress.set_result",
+      "action_params": {
+        "result": 0
+      }
+    },
+    {
+      "table": "MyIngress.result_match",
+      "match": {
+	"meta.p0f_metadata.ttl": [64, 127],
+	"meta.p0f_metadata.olen": 0
+      },
+      "action_name": "MyIngress.set_result",
+      "action_params": {
+        "result": 1
+      }
+    },
+    {
+      "table": "MyIngress.result_match",
+      "match": {
+	"meta.p0f_metadata.ver": [4, 15],
+	"meta.p0f_metadata.ttl": [128, 254],
+	"meta.p0f_metadata.olen": 0
+      },
+      "action_name": "MyIngress.set_result",
+      "action_params": {
+        "result": 2
+      }
     }
   ]
 }

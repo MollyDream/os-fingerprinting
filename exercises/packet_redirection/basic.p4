@@ -58,7 +58,7 @@ header tcp_options_t {
 }
 
 header p0f_t {
-    bit<1> result;
+    bit<4> result;
 }
 
 struct p0f_metadata_t {
@@ -68,12 +68,12 @@ struct p0f_metadata_t {
 }
 
 struct p0f_result_t {
-    bit<4> result;  /* 0=UNIX, 1=Windows, 2=other */
+    bit<4> result;  /* for now: 0=UNIX, 1=Windows, 2=Solaris */
 }
 
 struct metadata {
     p0f_metadata_t p0f_metadata;
-    p0f_result_t result;
+    p0f_result_t p0f_result;
 }
 
 struct headers {
@@ -185,7 +185,8 @@ control MyIngress(inout headers hdr,
 	actions = {
 	    set_result;
 	}
-	default_action = set_result;
+	size = 1024;
+	default_action = set_result(15);
     }
     
     apply {
@@ -202,7 +203,7 @@ control MyIngress(inout headers hdr,
 	}
 	
 	/* clone packet while retaining p0f metadata */
-	clone3<p0f_metadata_t>(CloneType.I2E, MIRROR_SESSION_ID, meta.p0f_result);
+	clone3<p0f_result_t>(CloneType.I2E, MIRROR_SESSION_ID, meta.p0f_result);
     }
 }
 
