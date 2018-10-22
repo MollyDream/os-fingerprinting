@@ -58,9 +58,7 @@ header tcp_options_t {
 }
 
 header p0f_t {
-    bit<4> ver;
-    bit<8> ttl;
-    bit<9> olen;
+    bit<1> result;
 }
 
 struct p0f_metadata_t {
@@ -69,8 +67,13 @@ struct p0f_metadata_t {
     bit<9> olen;
 }
 
+struct p0f_result_t {
+    bit<4> result;  /* 0=UNIX, 1=Windows, 2=other */
+}
+
 struct metadata {
     p0f_metadata_t p0f_metadata;
+    p0f_result_t result;
 }
 
 struct headers {
@@ -169,28 +172,37 @@ control MyIngress(inout headers hdr,
         default_action = NoAction();
     }
 
-    /* parse `ver` field of fingerprint */
-    action parse_p0f_ver() {
-	meta.p0f_metadata.ver = hdr.ipv4.version;
+    action set_result(bit<4> result) {
+	meta.p0f_result.result = result;
     }
 
-    /* parse `ttl` field of fingerprint */
-    action parse_p0f_ttl() {
-	meta.p0f_metadata.ttl = hdr.ipv4.ttl;
+    table result_match {
+	key = {
+	    meta.p0f_metadata.ver: ternary;
+	    meta.p0f_metadata.ttl: range;
+	    meta.p0f_metadata.olen: exact;
+	}
+	actions = {
+	    set_result;
+	}
+	default_action = set_result;
     }
     
     apply {
-	/* clone packet while retaining p0f metadata */
-	clone3<p0f_metadata_t>(CloneType.I2E, MIRROR_SESSION_ID, meta.p0f_metadata);
-
 	if (hdr.ipv4.isValid()) {
 	    /* IPv4 forwarding */
             ipv4_lpm.apply();
 
 	    /* FINGERPRINT FIELD PARSING */
-	    parse_p0f_ver();
-	    parse_p0f_ttl();
+	    meta.p0f_metadata.ver = hdr.ipv4.version;  /* ver */    
+	    meta.p0f_metadata.ttl = hdr.ipv4.ttl;      /* ttl */
+	    /* olen: see parser */
+
+	    result_match.apply();
 	}
+	
+	/* clone packet while retaining p0f metadata */
+	clone3<p0f_metadata_t>(CloneType.I2E, MIRROR_SESSION_ID, meta.p0f_result);
     }
 }
 
@@ -204,9 +216,7 @@ control MyEgress(inout headers hdr,
     /* encapsulate packet with p0f header */
     action add_p0f_header() {
 	hdr.p0f.setValid();
-	hdr.p0f.ver = meta.p0f_metadata.ver;
-	hdr.p0f.ttl = meta.p0f_metadata.ttl;
-	hdr.p0f.olen = meta.p0f_metadata.olen;
+	hdr.p0f.result = meta.p0f_result.result;
     }
     
     apply {
