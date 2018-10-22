@@ -47,7 +47,8 @@
       "match": {
 	"meta.p0f_metadata.ttl": [0, 63],
 	"meta.p0f_metadata.olen": 0,
-	"meta.p0f_metadata.olayout": 149523
+	"meta.p0f_metadata.olayout": 149523,
+	"meta.p0f_metadata.pclass": 0
       },
       "action_name": "MyIngress.set_result",
       "action_params": {
@@ -59,7 +60,8 @@
       "match": {
 	"meta.p0f_metadata.ttl": [64, 127],
 	"meta.p0f_metadata.olen": 0,
-	"meta.p0f_metadata.olayout": 8468
+	"meta.p0f_metadata.olayout": 8468,
+	"meta.p0f_metadata.pclass": 0
       },
       "action_name": "MyIngress.set_result",
       "action_params": {
@@ -71,7 +73,8 @@
       "match": {
 	"meta.p0f_metadata.ttl": [64, 127],
 	"meta.p0f_metadata.olen": 0,
-	"meta.p0f_metadata.olayout": 2175252
+	"meta.p0f_metadata.olayout": 2175252,
+	"meta.p0f_metadata.pclass": 0
       },
       "action_name": "MyIngress.set_result",
       "action_params": {
@@ -83,7 +86,8 @@
       "match": {
 	"meta.p0f_metadata.ttl": [0, 63],
 	"meta.p0f_metadata.olen": 0,
-	"meta.p0f_metadata.olayout": 556865600
+	"meta.p0f_metadata.olayout": 556865600,
+	"meta.p0f_metadata.pclass": 0
       },
       "action_name": "MyIngress.set_result",
       "action_params": {
@@ -98,7 +102,8 @@
 	"meta.p0f_metadata.olen": 0,
 	"meta.p0f_metadata.mss": [1024, 65535],
 	"meta.p0f_metadata.scale": [0, 255],
-	"meta.p0f_metadata.olayout": 2
+	"meta.p0f_metadata.olayout": 2,
+	"meta.p0f_metadata.pclass": 0
       },
       "action_name": "MyIngress.set_result",
       "action_params": {

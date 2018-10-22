@@ -92,26 +92,26 @@ header p0f_t {
     /* 
     for now: 
     00 = generic Linux 
-         (ver=*, ittl=64, olen=0, mss=*, scale=*, olayout=0x24813)
+         (ver=*, ittl=64, olen=0, mss=*, scale=*, olayout=0x24813, pclass=0)
          sendip -p ipv4 -it 64 -p tcp -tomss 1460 -tosackok -tots 2335443:0 -tonop -towscale 9 10.0.3.3
 
     01 = generic Windows
-         (ver=*, ittl=128, olen=0, mss=*, scale=*, olayout=0x2114)
+         (ver=*, ittl=128, olen=0, mss=*, scale=*, olayout=0x2114, pclass=0)
          sendip -p ipv4 -it 128 -p tcp -tomss 1460 -tonop -tonop -tosackok 10.0.3.3
-        (ver=*, ittl=128, olen=0, mss=*, scale=*, olayout=0x213114)
-        sendip -p ipv4 -it 128 -p tcp -tomss 1460 -tonop -towscale 9 -tonop -tonop -tosackok 10.0.3.3
+         (ver=*, ittl=128, olen=0, mss=*, scale=*, olayout=0x213114, pclass=0)
+         sendip -p ipv4 -it 128 -p tcp -tomss 1460 -tonop -towscale 9 -tonop -tonop -tosackok 10.0.3.3
 
     02 = generic Mac OS
-         (ver=*, ittl=64, olen=0, mss=*, scale=*, olayout=0x21311840)
+         (ver=*, ittl=64, olen=0, mss=*, scale=*, olayout=0x21311840, pclass=0)
          TODO: if make proposed change to tcp options parser, add additional 
          0 to end of olayout
          sendip -p ipv4 -it 64 -p tcp -tomss 1460 -tonop -towscale 9 -tonop -tonop -tots 2335443:0 -tosackok -toeol -toeol 10.0.3.3
 
     03 = NeXTSTEP
-         (ver=4, ittl=64, olen=0, mss=1024, scale=0, olayout=0x2)
-         sendip -p ipv4 -it 128 -p tcp -tomss 1024 10.0.3.3
+         (ver=4, ittl=64, olen=0, mss=1024, scale=0, olayout=0x2, pclass=0)
+         sendip -p ipv4 -it 64 -p tcp -tomss 1024 10.0.3.3
     */
-    bit<8> result;  
+    bit<8> result;
 }
 
 struct p0f_metadata_t {
@@ -119,12 +119,15 @@ struct p0f_metadata_t {
     bit<8> ttl;
     bit<9> olen;
     bit<16> mss;
+    bit<16> wsize;
+    bit<16> wsize_div_mss;
     bit<8> scale;
     /* 
     concatenate kind fields (cast to 4 bits) of tcp options 
     TODO: use less space-intensive way of storing olayout
     */
-    bit<160> olayout;  
+    bit<160> olayout;
+    bit<32> pclass;
 }
 
 /* should match fields in p0f_t */
@@ -214,12 +217,12 @@ parser Tcp_option_parser(packet_in b,
 	meta.p0f_metadata.olayout = meta.p0f_metadata.olayout + (bit<160>) kind;
 	/* transition on kind */
         transition select(kind) {
-            0: parse_tcp_option_end;
-            1: parse_tcp_option_nop;
-            2: parse_tcp_option_ss;
-            3: parse_tcp_option_s;
+	    0: parse_tcp_option_end;
+	    1: parse_tcp_option_nop;
+	    2: parse_tcp_option_ss;
+	    3: parse_tcp_option_s;
 	    4: parse_tcp_option_sack_permitted;
-            5: parse_tcp_option_sack;
+	    5: parse_tcp_option_sack;
 	    8: parse_tcp_option_timestamps;
         }
     }
@@ -387,6 +390,8 @@ control MyIngress(inout headers hdr,
 	    meta.p0f_metadata.mss: ternary;
 	    meta.p0f_metadata.scale: ternary;
 	    meta.p0f_metadata.olayout: exact;
+	    /* it doesn't look like p0f.fp contains any signatures that have pclass != -> should we still include? */
+	    meta.p0f_metadata.pclass: exact;
 	}
 	actions = {
 	    set_result;
@@ -403,12 +408,31 @@ control MyIngress(inout headers hdr,
 	    /* FINGERPRINT FIELD PARSING */
 	    meta.p0f_metadata.ver = hdr.ipv4.version;  /* ver */    
 	    meta.p0f_metadata.ttl = hdr.ipv4.ttl;      /* ttl */
-	    /* olen, mss, scale: see parser */
+	    meta.p0f_metadata.wsize = hdr.tcp.window;  /* wsize */
+
+	    /* 
+	    meta.p0f_metadata.wsize_div_mss = (bit<16>) meta.p0f_metadata.wsize / (bit<16>) meta.p0f_metadata.mss;  //  Implement this with tables?
+	    */
+
+	    /* pclass */
+	    bit<32> ip_header_length;
+	    if (hdr.ipv4.isValid()) {
+		ip_header_length = 20 + (bit<32>) meta.p0f_metadata.olen;
+	    } else {  // ipv6
+		ip_header_length = 40 + (bit<32>) meta.p0f_metadata.olen;
+	    }
+	    meta.p0f_metadata.pclass =
+	        standard_metadata.packet_length    // length of whole packet
+	        - 4 * (bit<32>) hdr.tcp.dataOffset // length of TCP header
+	        - ip_header_length                 // length of IP header
+	        - 14;                              // length of Ethernet header
+
+	    /* for olen, mss, scale: see parser */
 
 	    result_match.apply();
 	}
 	
-	/* clone packet while retaining p0f metadata */
+	/* clone packet while retaining p0f_result metadata */
 	clone3<p0f_result_t>(CloneType.I2E, MIRROR_SESSION_ID, meta.p0f_result);
     }
 }
