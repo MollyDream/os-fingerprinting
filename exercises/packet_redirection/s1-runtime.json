@@ -46,7 +46,8 @@
       "table": "MyIngress.result_match",
       "match": {
 	"meta.p0f_metadata.ttl": [0, 63],
-	"meta.p0f_metadata.olen": 0
+	"meta.p0f_metadata.olen": 0,
+	"meta.p0f_metadata.olayout": 149523
       },
       "action_name": "MyIngress.set_result",
       "action_params": {
@@ -57,7 +58,8 @@
       "table": "MyIngress.result_match",
       "match": {
 	"meta.p0f_metadata.ttl": [64, 127],
-	"meta.p0f_metadata.olen": 0
+	"meta.p0f_metadata.olen": 0,
+	"meta.p0f_metadata.olayout": 8468
       },
       "action_name": "MyIngress.set_result",
       "action_params": {
@@ -67,13 +69,40 @@
     {
       "table": "MyIngress.result_match",
       "match": {
-	"meta.p0f_metadata.ver": [4, 15],
-	"meta.p0f_metadata.ttl": [128, 254],
-	"meta.p0f_metadata.olen": 0
+	"meta.p0f_metadata.ttl": [64, 127],
+	"meta.p0f_metadata.olen": 0,
+	"meta.p0f_metadata.olayout": 2175252
+      },
+      "action_name": "MyIngress.set_result",
+      "action_params": {
+        "result": 1
+      }
+    },
+    {
+      "table": "MyIngress.result_match",
+      "match": {
+	"meta.p0f_metadata.ttl": [0, 63],
+	"meta.p0f_metadata.olen": 0,
+	"meta.p0f_metadata.olayout": 556865600
       },
       "action_name": "MyIngress.set_result",
       "action_params": {
         "result": 2
+      }
+    },
+    {
+      "table": "MyIngress.result_match",
+      "match": {
+	"meta.p0f_metadata.ver": [4, 15],
+	"meta.p0f_metadata.ttl": [0, 63],
+	"meta.p0f_metadata.olen": 0,
+	"meta.p0f_metadata.mss": [1024, 65535],
+	"meta.p0f_metadata.scale": [0, 255],
+	"meta.p0f_metadata.olayout": 2
+      },
+      "action_name": "MyIngress.set_result",
+      "action_params": {
+        "result": 3
       }
     }
   ]

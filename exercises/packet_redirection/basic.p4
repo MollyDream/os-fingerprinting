@@ -53,22 +53,83 @@ header tcp_t {
     bit<16> urgentPtr;
 }
 
-header tcp_options_t {
-    varbit<320> options;
+header tcp_option_t {
+    bit<8> kind;
+    varbit<312> content;
+}
+
+header tcp_option_ss_t {
+    bit<8> kind;
+    bit<8> length;
+    bit<16> mss;
+}
+
+header tcp_option_s_t {
+    bit<8> kind;
+    bit<8> length;
+    bit<8> scale;
+}
+
+header tcp_option_sack_top_t {
+    bit<8> kind;
+    bit<8> length;
+}
+
+/* A stack of up to 40 TCP options */
+typedef tcp_option_t[40] tcp_option_stack_t;
+
+header tcp_option_padding_t {
+    varbit<320> padding;
+}
+
+error {
+    TcpDataOffsetTooSmall,
+    TcpOptionTooLongForHeader,
+    TcpBadSackOptionLength
 }
 
 header p0f_t {
-    bit<4> result;
+    /* 
+    for now: 
+    00 = generic Linux 
+         (ver=*, ittl=64, olen=0, mss=*, scale=*, olayout=0x24813)
+         sendip -p ipv4 -it 64 -p tcp -tomss 1460 -tosackok -tots 2335443:0 -tonop -towscale 9 10.0.3.3
+
+    01 = generic Windows
+         (ver=*, ittl=128, olen=0, mss=*, scale=*, olayout=0x2114)
+         sendip -p ipv4 -it 128 -p tcp -tomss 1460 -tonop -tonop -tosackok 10.0.3.3
+        (ver=*, ittl=128, olen=0, mss=*, scale=*, olayout=0x213114)
+        sendip -p ipv4 -it 128 -p tcp -tomss 1460 -tonop -towscale 9 -tonop -tonop -tosackok 10.0.3.3
+
+    02 = generic Mac OS
+         (ver=*, ittl=64, olen=0, mss=*, scale=*, olayout=0x21311840)
+         TODO: if make proposed change to tcp options parser, add additional 
+         0 to end of olayout
+         sendip -p ipv4 -it 64 -p tcp -tomss 1460 -tonop -towscale 9 -tonop -tonop -tots 2335443:0 -tosackok -toeol -toeol 10.0.3.3
+
+    03 = NeXTSTEP
+         (ver=4, ittl=64, olen=0, mss=1024, scale=0, olayout=0x2)
+         sendip -p ipv4 -it 128 -p tcp -tomss 1024 10.0.3.3
+    */
+    bit<8> result;  
 }
 
 struct p0f_metadata_t {
     bit<4> ver;
     bit<8> ttl;
     bit<9> olen;
+    bit<16> mss;
+    bit<8> scale;
+    /* 
+    concatenate kind fields (cast to 4 bits) of tcp options 
+    TODO: use less space-intensive way of storing olayout
+    */
+    bit<160> olayout;  
 }
 
+/* should match fields in p0f_t */
 struct p0f_result_t {
-    bit<4> result;  /* for now: 0=UNIX, 1=Windows, 2=Solaris */
+    bit<8> result;
 }
 
 struct metadata {
@@ -77,18 +138,161 @@ struct metadata {
 }
 
 struct headers {
-    ethernet_t     ethernet;
-    ipv4_t         ipv4;
-    ipv4_options_t ipv4_options;
-    tcp_t          tcp;
-    tcp_options_t  tcp_options;
-    p0f_t          p0f;
+    ethernet_t           ethernet;
+    ipv4_t               ipv4;
+    ipv4_options_t       ipv4_options;
+    tcp_t                tcp;
+    tcp_option_stack_t   tcp_options_vec;
+    tcp_option_padding_t tcp_options_padding;
+    p0f_t                p0f;
 }
 
 /*************************************************************************
 *********************** P A R S E R  ***********************************
 *************************************************************************/
 
+/* 
+TCP options subparser
+Adapted from https://github.com/jafingerhut/p4-guide/blob/master/tcp-options-parser/tcp-options-parser2.p4
+*/
+/*
+Copyright 2017 Cisco Systems, Inc.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+    http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+// This sub-parser is intended to be apply'd just after the base
+// 20-byte TCP header has been extracted.  It should be called with
+// the value of the Data Offset field.  It will fill in the @vec
+// argument with a stack of TCP options found, perhaps empty.
+
+// Unless some error is detect earlier (causing this sub-parser to
+// transition to the reject state), it will advance exactly to the end
+// of the TCP header, leaving the packet 'pointer' at the first byte
+// of the TCP payload (if any).  If the packet ends before the full
+// TCP header can be consumed, this sub-parser will set
+// error.PacketTooShort and transition to reject.
+
+parser Tcp_option_parser(packet_in b,
+                         in bit<4> tcp_hdr_data_offset,
+                         inout metadata meta, 
+                         out tcp_option_stack_t vec,
+                         out tcp_option_padding_t padding)
+{
+    bit<9> tcp_hdr_bytes_left;
+    
+    state start {
+        // RFC 793 - the Data Offset field is the length of the TCP
+        // header in units of 32-bit words.  It must be at least 5 for
+        // the minimum length TCP header, and since it is 4 bits in
+        // size, can be at most 15, for a maximum TCP header length of
+        // 15*4 = 60 bytes.
+        verify(tcp_hdr_data_offset >= 5, error.TcpDataOffsetTooSmall);
+        tcp_hdr_bytes_left = 4 * (bit<9>) (tcp_hdr_data_offset - 5);
+        // always true here: 0 <= tcp_hdr_bytes_left <= 40
+        transition next_option;
+    }
+    state next_option {
+        transition select(tcp_hdr_bytes_left) {
+            0 : accept;  // no TCP header bytes left
+            default : next_option_part2;
+        }
+    }
+    state next_option_part2 {
+	// precondition: tcp_hdr_bytes_left >= 1
+	/* kind byte */
+	bit<8> kind = b.lookahead<bit<8>>();
+	/* update olayout metadata field */
+	meta.p0f_metadata.olayout = (bit<160>) meta.p0f_metadata.olayout << 4;
+	meta.p0f_metadata.olayout = meta.p0f_metadata.olayout + (bit<160>) kind;
+	/* transition on kind */
+        transition select(kind) {
+            0: parse_tcp_option_end;
+            1: parse_tcp_option_nop;
+            2: parse_tcp_option_ss;
+            3: parse_tcp_option_s;
+	    4: parse_tcp_option_sack_permitted;
+            5: parse_tcp_option_sack;
+	    8: parse_tcp_option_timestamps;
+        }
+    }
+    state parse_tcp_option_end {
+        verify(tcp_hdr_bytes_left >= 1, error.TcpOptionTooLongForHeader);
+        tcp_hdr_bytes_left = tcp_hdr_bytes_left - 1;
+        b.extract(vec.next, 0);
+	transition consume_remaining_tcp_hdr_and_accept;
+    }
+    state consume_remaining_tcp_hdr_and_accept {
+        // A more picky sub-parser implementation would verify that
+        // all of the remaining bytes are 0, as specified in RFC 793,
+        // setting an error and rejecting if not.  This one skips past
+        // the rest of the TCP header without checking this.
+
+        // tcp_hdr_bytes_left might be as large as 40, so multiplying
+        // it by 8 it may be up to 320, which requires 9 bits to avoid
+        // losing any information.
+        b.extract(padding, (bit<32>) (8 * (bit<9>) tcp_hdr_bytes_left));
+        transition accept;
+    }
+    state parse_tcp_option_nop {
+        verify(tcp_hdr_bytes_left >= 1, error.TcpOptionTooLongForHeader);
+        tcp_hdr_bytes_left = tcp_hdr_bytes_left - 1;
+        b.extract(vec.next, 0);
+        transition next_option;
+    }
+    state parse_tcp_option_ss {
+        verify(tcp_hdr_bytes_left >= 4, error.TcpOptionTooLongForHeader);
+	/* set metadata field */
+	meta.p0f_metadata.mss = b.lookahead<tcp_option_ss_t>().mss;
+	tcp_hdr_bytes_left = tcp_hdr_bytes_left - 4;
+        b.extract(vec.next, 3*8);
+        transition next_option;
+    }
+    state parse_tcp_option_s {
+        verify(tcp_hdr_bytes_left >= 3, error.TcpOptionTooLongForHeader);
+	/* set metadata field */
+	meta.p0f_metadata.scale = b.lookahead<tcp_option_s_t>().scale;
+	tcp_hdr_bytes_left = tcp_hdr_bytes_left - 3;
+        b.extract(vec.next, 2*8);
+        transition next_option;
+    }
+    state parse_tcp_option_sack_permitted {
+	verify(tcp_hdr_bytes_left >= 2, error.TcpOptionTooLongForHeader);
+	tcp_hdr_bytes_left = tcp_hdr_bytes_left - 2;
+	b.extract(vec.next, 1*8);
+	transition next_option;
+    }
+    state parse_tcp_option_sack {
+        bit<8> n_sack_bytes = b.lookahead<tcp_option_sack_top_t>().length;
+        // I do not have global knowledge of all TCP SACK
+        // implementations, but from reading the RFC, it appears that
+        // the only SACK option lengths that are legal are 2+8*n for
+        // n=1, 2, 3, or 4, so set an error if anything else is seen.
+        verify(n_sack_bytes == 10 || n_sack_bytes == 18 ||
+               n_sack_bytes == 26 || n_sack_bytes == 34,
+               error.TcpBadSackOptionLength);
+        verify(tcp_hdr_bytes_left >= (bit<9>) n_sack_bytes,
+               error.TcpOptionTooLongForHeader);
+        tcp_hdr_bytes_left = tcp_hdr_bytes_left - (bit<9>) n_sack_bytes;
+        b.extract(vec.next, (bit<32>) (8 * n_sack_bytes - 16));
+        transition next_option;
+    }
+    state parse_tcp_option_timestamps {
+	verify(tcp_hdr_bytes_left >= 10, error.TcpOptionTooLongForHeader);
+	tcp_hdr_bytes_left = tcp_hdr_bytes_left - 10;
+	b.extract(vec.next, 9*8);
+	transition next_option;
+    }
+}
+
+/* Parser */
 parser MyParser(packet_in packet,
                 out headers hdr,
                 inout metadata meta,
@@ -123,10 +327,8 @@ parser MyParser(packet_in packet,
 
     state parse_tcp {
 	packet.extract(hdr.tcp);
-	/* Data offset field stores total size of TCP header in 4B   */
-	/* words. 5 -> 20 bytes == length of options-less TCP header */
-	tcp_options_bytes = 4 * (bit<9>)(hdr.tcp.dataOffset - 5);
-	packet.extract(hdr.tcp_options, (bit<32>) (8 * tcp_options_bytes));
+	Tcp_option_parser.apply(packet, hdr.tcp.dataOffset, meta,
+	                        hdr.tcp_options_vec, hdr.tcp_options_padding);
 	transition accept;
     }
 }
@@ -172,7 +374,7 @@ control MyIngress(inout headers hdr,
         default_action = NoAction();
     }
 
-    action set_result(bit<4> result) {
+    action set_result(bit<8> result) {
 	meta.p0f_result.result = result;
     }
 
@@ -180,13 +382,17 @@ control MyIngress(inout headers hdr,
 	key = {
 	    meta.p0f_metadata.ver: ternary;
 	    meta.p0f_metadata.ttl: range;
+	    /* it doesn't look like p0f.fp contains any signatures that have olen != 0 -> should we still include? */
 	    meta.p0f_metadata.olen: exact;
+	    meta.p0f_metadata.mss: ternary;
+	    meta.p0f_metadata.scale: ternary;
+	    meta.p0f_metadata.olayout: exact;
 	}
 	actions = {
 	    set_result;
 	}
 	size = 1024;
-	default_action = set_result(15);
+	default_action = set_result(255);
     }
     
     apply {
@@ -197,7 +403,7 @@ control MyIngress(inout headers hdr,
 	    /* FINGERPRINT FIELD PARSING */
 	    meta.p0f_metadata.ver = hdr.ipv4.version;  /* ver */    
 	    meta.p0f_metadata.ttl = hdr.ipv4.ttl;      /* ttl */
-	    /* olen: see parser */
+	    /* olen, mss, scale: see parser */
 
 	    result_match.apply();
 	}
@@ -263,7 +469,8 @@ control MyDeparser(packet_out packet, in headers hdr) {
 	packet.emit(hdr.ipv4);
 	packet.emit(hdr.ipv4_options);
 	packet.emit(hdr.tcp);
-	packet.emit(hdr.tcp_options);
+	packet.emit(hdr.tcp_options_vec);
+	packet.emit(hdr.tcp_options_padding);
 	packet.emit(hdr.p0f);
     }
 }
