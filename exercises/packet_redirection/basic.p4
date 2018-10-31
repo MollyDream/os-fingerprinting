@@ -78,10 +78,6 @@ header tcp_option_sack_top_t {
 /* A stack of up to 40 TCP options */
 typedef tcp_option_t[40] tcp_option_stack_t;
 
-header tcp_option_padding_t {
-    varbit<320> padding;
-}
-
 error {
     TcpDataOffsetTooSmall,
     TcpOptionTooLongForHeader,
@@ -106,9 +102,7 @@ header p0f_t {
          sendip -p ipv4 -it 128 -p tcp -tomss 1460 -tonop -towscale 9 -tonop -tonop -tosackok 10.0.3.3
 
     02 = generic Mac OS
-         (ver=*, ittl=64, olen=0, mss=*, wsize=65535, scale=*, olayout=0x21311840, pclass=0)
-         TODO: if make proposed change to tcp options parser, add additional 
-         0 to end of olayout
+         (ver=*, ittl=64, olen=0, mss=*, wsize=65535, scale=*, olayout=0x213118400, pclass=0)
          sendip -p ipv4 -it 64 -p tcp -tomss 1460 -tw 65535 -tonop -towscale 9 -tonop -tonop -tots 2335443:0 -tosackok -toeol -toeol 10.0.3.3
 
     03 = NeXTSTEP
@@ -159,7 +153,6 @@ struct headers {
     ipv4_options_t       ipv4_options;
     tcp_t                tcp;
     tcp_option_stack_t   tcp_options_vec;
-    tcp_option_padding_t tcp_options_padding;
     p0f_t                p0f;
 }
 
@@ -199,8 +192,7 @@ limitations under the License.
 parser Tcp_option_parser(packet_in b,
                          in bit<4> tcp_hdr_data_offset,
                          inout metadata meta, 
-                         out tcp_option_stack_t vec,
-                         out tcp_option_padding_t padding)
+                         out tcp_option_stack_t vec)
 {
     bit<9> tcp_hdr_bytes_left;
     
@@ -243,20 +235,13 @@ parser Tcp_option_parser(packet_in b,
         verify(tcp_hdr_bytes_left >= 1, error.TcpOptionTooLongForHeader);
         tcp_hdr_bytes_left = tcp_hdr_bytes_left - 1;
         b.extract(vec.next, 0);
-	transition consume_remaining_tcp_hdr_and_accept;
-    }
-    state consume_remaining_tcp_hdr_and_accept {
+	
         // A more picky sub-parser implementation would verify that
         // all of the remaining bytes are 0, as specified in RFC 793,
-        // setting an error and rejecting if not.  This one skips past
-        // the rest of the TCP header without checking this.
-
-        // tcp_hdr_bytes_left might be as large as 40, so multiplying
-        // it by 8 it may be up to 320, which requires 9 bits to avoid
-        // losing any information.
-        b.extract(padding, (bit<32>) (8 * (bit<9>) tcp_hdr_bytes_left));
-        transition accept;
+        // setting an error and rejecting if not.
+	transition next_option;
     }
+    
     state parse_tcp_option_nop {
         verify(tcp_hdr_bytes_left >= 1, error.TcpOptionTooLongForHeader);
         tcp_hdr_bytes_left = tcp_hdr_bytes_left - 1;
@@ -344,7 +329,7 @@ parser MyParser(packet_in packet,
     state parse_tcp {
 	packet.extract(hdr.tcp);
 	Tcp_option_parser.apply(packet, hdr.tcp.dataOffset, meta,
-	                        hdr.tcp_options_vec, hdr.tcp_options_padding);
+	                        hdr.tcp_options_vec);
 	transition accept;
     }
 }
@@ -546,7 +531,6 @@ control MyDeparser(packet_out packet, in headers hdr) {
 	packet.emit(hdr.ipv4_options);
 	packet.emit(hdr.tcp);
 	packet.emit(hdr.tcp_options_vec);
-	packet.emit(hdr.tcp_options_padding);
 	packet.emit(hdr.p0f);
     }
 }
