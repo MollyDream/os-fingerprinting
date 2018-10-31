@@ -92,26 +92,38 @@ header p0f_t {
     /* 
     for now: 
     00 = generic Linux 
-         (ver=*, ittl=64, olen=0, mss=*, scale=*, olayout=0x24813, pclass=0)
-         sendip -p ipv4 -it 64 -p tcp -tomss 1460 -tosackok -tots 2335443:0 -tonop -towscale 9 10.0.3.3
+         (ver=*, ittl=64, olen=0, mss=*, wsize=mss*11, scale=*, olayout=0x24813, pclass=0)
+         sendip -p ipv4 -it 64 -p tcp -tomss 1460 -tw 16060 -tosackok -tots 2335443:0 -tonop -towscale 9 10.0.3.3
+         (ver=*, ittl=64, olen=0, mss=*, wsize=mss*20, scale=*, olayout=0x24813, pclass=0)
+    sendip -p ipv4 -it 64 -p tcp -tomss 1460 -tw 29200 -tosackok -tots 2335443:0 -tonop -towscale 9 10.0.3.3
+         (ver=*, ittl=64, olen=0, mss=*, wsize=mss*22, scale=*, olayout=0x24813, pclass=0)
+    sendip -p ipv4 -it 64 -p tcp -tomss 1460 -tw 32120 -tosackok -tots 2335443:0 -tonop -towscale 9 10.0.3.3
 
     01 = generic Windows
-         (ver=*, ittl=128, olen=0, mss=*, scale=*, olayout=0x2114, pclass=0)
+         (ver=*, ittl=128, olen=0, mss=*, wsize=*, scale=*, olayout=0x2114, pclass=0)
          sendip -p ipv4 -it 128 -p tcp -tomss 1460 -tonop -tonop -tosackok 10.0.3.3
-         (ver=*, ittl=128, olen=0, mss=*, scale=*, olayout=0x213114, pclass=0)
+         (ver=*, ittl=128, olen=0, mss=*, wsize=*, scale=*, olayout=0x213114, pclass=0)
          sendip -p ipv4 -it 128 -p tcp -tomss 1460 -tonop -towscale 9 -tonop -tonop -tosackok 10.0.3.3
 
     02 = generic Mac OS
-         (ver=*, ittl=64, olen=0, mss=*, scale=*, olayout=0x21311840, pclass=0)
+         (ver=*, ittl=64, olen=0, mss=*, wsize=65535, scale=*, olayout=0x21311840, pclass=0)
          TODO: if make proposed change to tcp options parser, add additional 
          0 to end of olayout
-         sendip -p ipv4 -it 64 -p tcp -tomss 1460 -tonop -towscale 9 -tonop -tonop -tots 2335443:0 -tosackok -toeol -toeol 10.0.3.3
+         sendip -p ipv4 -it 64 -p tcp -tomss 1460 -tw 65535 -tonop -towscale 9 -tonop -tonop -tots 2335443:0 -tosackok -toeol -toeol 10.0.3.3
 
     03 = NeXTSTEP
-         (ver=4, ittl=64, olen=0, mss=1024, scale=0, olayout=0x2, pclass=0)
-         sendip -p ipv4 -it 64 -p tcp -tomss 1024 10.0.3.3
+         (ver=4, ittl=64, olen=0, mss=1024, wsize=mss*4, scale=0, olayout=0x2, pclass=0)
+         sendip -p ipv4 -it 64 -p tcp -tomss 1024 -tw 4096 10.0.3.3
     */
     bit<8> result;
+}
+
+// Temporary variables for use in division_helper action
+struct division_metadata_t {
+    bit<16> dividend;
+    bit<16> divisor;
+    bit<32> acc;
+    bit<16> quotient;
 }
 
 struct p0f_metadata_t {
@@ -124,7 +136,7 @@ struct p0f_metadata_t {
     bit<8> scale;
     /* 
     concatenate kind fields (cast to 4 bits) of tcp options 
-    TODO: use less space-intensive way of storing olayout
+    TODO: use less space-intensive way of storing olayout?
     */
     bit<160> olayout;
     bit<32> pclass;
@@ -136,6 +148,7 @@ struct p0f_result_t {
 }
 
 struct metadata {
+    division_metadata_t division_metadata;
     p0f_metadata_t p0f_metadata;
     p0f_result_t p0f_result;
 }
@@ -377,6 +390,39 @@ control MyIngress(inout headers hdr,
         default_action = NoAction();
     }
 
+    // i = current bit to test
+    action divide_helper(bit<4> i) {
+	bit<32> shifted_divisor = ((bit<32>) meta.division_metadata.divisor) << i;
+	bit<16> or_mask = 1;
+	or_mask = or_mask << i;
+	
+	if (meta.division_metadata.acc + shifted_divisor <= (bit<32>) meta.division_metadata.dividend) {
+	    meta.division_metadata.acc = meta.division_metadata.acc + shifted_divisor;
+	    meta.division_metadata.quotient = meta.division_metadata.quotient | or_mask;
+	}
+    }
+
+    // Divides meta.division_metadata.dividend by meta.division_metadata.divisor, storing the result in meta.division_metadata.quotient.
+    // Adapted from: https://www.geeksforgeeks.org/divide-two-integers-without-using-multiplication-division-mod-operator/ ("Efficient Approach")
+    action divide() {
+	divide_helper(15);
+	divide_helper(14);
+	divide_helper(13);
+	divide_helper(12);
+	divide_helper(11);
+	divide_helper(10);
+	divide_helper(9);
+	divide_helper(8);
+	divide_helper(7);
+	divide_helper(6);
+	divide_helper(5);
+	divide_helper(4);
+	divide_helper(3);
+	divide_helper(2);
+	divide_helper(1);
+	divide_helper(0);
+    }
+
     action set_result(bit<8> result) {
 	meta.p0f_result.result = result;
     }
@@ -388,6 +434,8 @@ control MyIngress(inout headers hdr,
 	    /* it doesn't look like p0f.fp contains any signatures that have olen != 0 -> should we still include? */
 	    meta.p0f_metadata.olen: exact;
 	    meta.p0f_metadata.mss: ternary;
+	    meta.p0f_metadata.wsize: ternary;
+	    meta.p0f_metadata.wsize_div_mss: ternary;
 	    meta.p0f_metadata.scale: ternary;
 	    meta.p0f_metadata.olayout: exact;
 	    /* it doesn't look like p0f.fp contains any signatures that have pclass != -> should we still include? */
@@ -410,9 +458,13 @@ control MyIngress(inout headers hdr,
 	    meta.p0f_metadata.ttl = hdr.ipv4.ttl;      /* ttl */
 	    meta.p0f_metadata.wsize = hdr.tcp.window;  /* wsize */
 
-	    /* 
-	    meta.p0f_metadata.wsize_div_mss = (bit<16>) meta.p0f_metadata.wsize / (bit<16>) meta.p0f_metadata.mss;  //  Implement this with tables?
-	    */
+	    /* calculate wsize / mss */
+	    meta.division_metadata.dividend = meta.p0f_metadata.wsize;
+	    meta.division_metadata.divisor = meta.p0f_metadata.mss;
+	    meta.division_metadata.acc = 0;
+	    meta.division_metadata.quotient = 0;
+	    divide();
+	    meta.p0f_metadata.wsize_div_mss = meta.division_metadata.quotient;
 
 	    /* pclass */
 	    bit<32> ip_header_length;
