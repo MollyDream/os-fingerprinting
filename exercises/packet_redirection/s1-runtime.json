@@ -45,11 +45,22 @@
     {
       "table": "MyIngress.result_match",
       "match": {
-	"meta.p0f_metadata.ttl": [0, 63],
-	"meta.p0f_metadata.olen": 0,
-	"meta.p0f_metadata.wsize_div_mss": [11, 65535],
-	"meta.p0f_metadata.olayout": 149523,
-	"meta.p0f_metadata.pclass": 0
+	  "meta.p0f_metadata.ttl": [0, 63],
+	  "meta.p0f_metadata.olen": 0,
+	  "meta.p0f_metadata.wsize_div_mss": [11, 65535],
+	  "meta.p0f_metadata.olayout": 149523,
+	  "meta.p0f_metadata.quirk_df": 1,
+	  "meta.p0f_metadata.quirk_nz_id": 1,
+	  "meta.p0f_metadata.quirk_zero_id": 0,
+	  "meta.p0f_metadata.quirk_ecn": 0,
+	  "meta.p0f_metadata.quirk_nz_mbz": 0,
+	  "meta.p0f_metadata.quirk_zero_seq": 0,
+	  "meta.p0f_metadata.quirk_nz_ack": 0,
+	  "meta.p0f_metadata.quirk_zero_ack": 0,
+	  "meta.p0f_metadata.quirk_nz_urg": 0,
+	  "meta.p0f_metadata.quirk_urg": 0,
+	  "meta.p0f_metadata.quirk_push": 0,
+	  "meta.p0f_metadata.pclass": 0
       },
       "action_name": "MyIngress.set_result",
       "action_params": {
@@ -59,11 +70,22 @@
     {
       "table": "MyIngress.result_match",
       "match": {
-	"meta.p0f_metadata.ttl": [0, 63],
-	"meta.p0f_metadata.olen": 0,
-	"meta.p0f_metadata.wsize_div_mss": [20, 65535],
-	"meta.p0f_metadata.olayout": 149523,
-	"meta.p0f_metadata.pclass": 0
+	  "meta.p0f_metadata.ttl": [0, 63],
+	  "meta.p0f_metadata.olen": 0,
+	  "meta.p0f_metadata.wsize_div_mss": [20, 65535],
+	  "meta.p0f_metadata.olayout": 149523,
+	  "meta.p0f_metadata.quirk_df": 1,
+	  "meta.p0f_metadata.quirk_nz_id": 1,
+	  "meta.p0f_metadata.quirk_zero_id": 0,
+	  "meta.p0f_metadata.quirk_ecn": 0,
+	  "meta.p0f_metadata.quirk_nz_mbz": 0,
+	  "meta.p0f_metadata.quirk_zero_seq": 0,
+	  "meta.p0f_metadata.quirk_nz_ack": 0,
+	  "meta.p0f_metadata.quirk_zero_ack": 0,
+	  "meta.p0f_metadata.quirk_nz_urg": 0,
+	  "meta.p0f_metadata.quirk_urg": 0,
+	  "meta.p0f_metadata.quirk_push": 0,
+	  "meta.p0f_metadata.pclass": 0
       },
       "action_name": "MyIngress.set_result",
       "action_params": {
@@ -73,11 +95,22 @@
     {
       "table": "MyIngress.result_match",
       "match": {
-	"meta.p0f_metadata.ttl": [0, 63],
-	"meta.p0f_metadata.olen": 0,
-	"meta.p0f_metadata.wsize_div_mss": [22, 65535],
-	"meta.p0f_metadata.olayout": 149523,
-	"meta.p0f_metadata.pclass": 0
+	  "meta.p0f_metadata.ttl": [0, 63],
+	  "meta.p0f_metadata.olen": 0,
+	  "meta.p0f_metadata.wsize_div_mss": [22, 65535],
+	  "meta.p0f_metadata.olayout": 149523,
+	  "meta.p0f_metadata.quirk_df": 1,
+	  "meta.p0f_metadata.quirk_nz_id": 1,
+	  "meta.p0f_metadata.quirk_zero_id": 0,
+	  "meta.p0f_metadata.quirk_ecn": 0,
+	  "meta.p0f_metadata.quirk_nz_mbz": 0,
+	  "meta.p0f_metadata.quirk_zero_seq": 0,
+	  "meta.p0f_metadata.quirk_nz_ack": 0,
+	  "meta.p0f_metadata.quirk_zero_ack": 0,
+	  "meta.p0f_metadata.quirk_nz_urg": 0,
+	  "meta.p0f_metadata.quirk_urg": 0,
+	  "meta.p0f_metadata.quirk_push": 0,
+	  "meta.p0f_metadata.pclass": 0
       },
       "action_name": "MyIngress.set_result",
       "action_params": {
@@ -87,10 +120,21 @@
     {
       "table": "MyIngress.result_match",
       "match": {
-	"meta.p0f_metadata.ttl": [64, 127],
-	"meta.p0f_metadata.olen": 0,
-	"meta.p0f_metadata.olayout": 8468,
-	"meta.p0f_metadata.pclass": 0
+	  "meta.p0f_metadata.ttl": [64, 127],
+	  "meta.p0f_metadata.olen": 0,
+	  "meta.p0f_metadata.olayout": 8468,
+	  "meta.p0f_metadata.quirk_df": 1,
+	  "meta.p0f_metadata.quirk_nz_id": 1,
+	  "meta.p0f_metadata.quirk_zero_id": 0,
+	  "meta.p0f_metadata.quirk_ecn": 0,
+	  "meta.p0f_metadata.quirk_nz_mbz": 0,
+	  "meta.p0f_metadata.quirk_zero_seq": 0,
+	  "meta.p0f_metadata.quirk_nz_ack": 0,
+	  "meta.p0f_metadata.quirk_zero_ack": 0,
+	  "meta.p0f_metadata.quirk_nz_urg": 0,
+	  "meta.p0f_metadata.quirk_urg": 0,
+	  "meta.p0f_metadata.quirk_push": 0,
+	  "meta.p0f_metadata.pclass": 0
       },
       "action_name": "MyIngress.set_result",
       "action_params": {
@@ -100,10 +144,21 @@
     {
       "table": "MyIngress.result_match",
       "match": {
-	"meta.p0f_metadata.ttl": [64, 127],
-	"meta.p0f_metadata.olen": 0,
-	"meta.p0f_metadata.olayout": 2175252,
-	"meta.p0f_metadata.pclass": 0
+	  "meta.p0f_metadata.ttl": [64, 127],
+	  "meta.p0f_metadata.olen": 0,
+	  "meta.p0f_metadata.olayout": 2175252,
+	  "meta.p0f_metadata.quirk_df": 1,
+	  "meta.p0f_metadata.quirk_nz_id": 1,
+	  "meta.p0f_metadata.quirk_zero_id": 0,
+	  "meta.p0f_metadata.quirk_ecn": 0,
+	  "meta.p0f_metadata.quirk_nz_mbz": 0,
+	  "meta.p0f_metadata.quirk_zero_seq": 0,
+	  "meta.p0f_metadata.quirk_nz_ack": 0,
+	  "meta.p0f_metadata.quirk_zero_ack": 0,
+	  "meta.p0f_metadata.quirk_nz_urg": 0,
+	  "meta.p0f_metadata.quirk_urg": 0,
+	  "meta.p0f_metadata.quirk_push": 0,
+	  "meta.p0f_metadata.pclass": 0
       },
       "action_name": "MyIngress.set_result",
       "action_params": {
@@ -113,11 +168,22 @@
     {
       "table": "MyIngress.result_match",
       "match": {
-	"meta.p0f_metadata.ttl": [0, 63],
-	"meta.p0f_metadata.olen": 0,
-	"meta.p0f_metadata.wsize": [65535, 65535],
-	"meta.p0f_metadata.olayout": 8909849600,
-	"meta.p0f_metadata.pclass": 0
+	  "meta.p0f_metadata.ttl": [0, 63],
+	  "meta.p0f_metadata.olen": 0,
+	  "meta.p0f_metadata.wsize": [65535, 65535],
+	  "meta.p0f_metadata.olayout": 8909849600,
+	  "meta.p0f_metadata.quirk_df": 1,
+	  "meta.p0f_metadata.quirk_nz_id": 1,
+	  "meta.p0f_metadata.quirk_zero_id": 0,
+	  "meta.p0f_metadata.quirk_ecn": 0,
+	  "meta.p0f_metadata.quirk_nz_mbz": 0,
+	  "meta.p0f_metadata.quirk_zero_seq": 0,
+	  "meta.p0f_metadata.quirk_nz_ack": 0,
+	  "meta.p0f_metadata.quirk_zero_ack": 0,
+	  "meta.p0f_metadata.quirk_nz_urg": 0,
+	  "meta.p0f_metadata.quirk_urg": 0,
+	  "meta.p0f_metadata.quirk_push": 0,
+	  "meta.p0f_metadata.pclass": 0
       },
       "action_name": "MyIngress.set_result",
       "action_params": {
@@ -127,14 +193,25 @@
     {
       "table": "MyIngress.result_match",
       "match": {
-	"meta.p0f_metadata.ver": [4, 15],
-	"meta.p0f_metadata.ttl": [0, 63],
-	"meta.p0f_metadata.olen": 0,
-	"meta.p0f_metadata.mss": [1024, 65535],
-	"meta.p0f_metadata.wsize_div_mss": [4, 65535],
-	"meta.p0f_metadata.scale": [0, 255],
-	"meta.p0f_metadata.olayout": 2,
-	"meta.p0f_metadata.pclass": 0
+	  "meta.p0f_metadata.ver": [4, 15],
+	  "meta.p0f_metadata.ttl": [0, 63],
+	  "meta.p0f_metadata.olen": 0,
+	  "meta.p0f_metadata.mss": [1024, 65535],
+	  "meta.p0f_metadata.wsize_div_mss": [4, 65535],
+	  "meta.p0f_metadata.scale": [0, 255],
+	  "meta.p0f_metadata.olayout": 2,
+	  "meta.p0f_metadata.quirk_df": 0,
+	  "meta.p0f_metadata.quirk_nz_id": 0,
+	  "meta.p0f_metadata.quirk_zero_id": 0,
+	  "meta.p0f_metadata.quirk_ecn": 0,
+	  "meta.p0f_metadata.quirk_nz_mbz": 0,
+	  "meta.p0f_metadata.quirk_zero_seq": 0,
+	  "meta.p0f_metadata.quirk_nz_ack": 0,
+	  "meta.p0f_metadata.quirk_zero_ack": 0,
+	  "meta.p0f_metadata.quirk_nz_urg": 0,
+	  "meta.p0f_metadata.quirk_urg": 0,
+	  "meta.p0f_metadata.quirk_push": 0,
+	  "meta.p0f_metadata.pclass": 0
       },
       "action_name": "MyIngress.set_result",
       "action_params": {

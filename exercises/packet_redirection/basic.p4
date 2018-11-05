@@ -88,28 +88,39 @@ header p0f_t {
     /* 
     for now: 
     00 = generic Linux 
-         (ver=*, ittl=64, olen=0, mss=*, wsize=mss*11, scale=*, olayout=0x24813, pclass=0)
-         sendip -p ipv4 -it 64 -p tcp -tomss 1460 -tw 16060 -tosackok -tots 2335443:0 -tonop -towscale 9 10.0.3.3
-         (ver=*, ittl=64, olen=0, mss=*, wsize=mss*20, scale=*, olayout=0x24813, pclass=0)
-    sendip -p ipv4 -it 64 -p tcp -tomss 1460 -tw 29200 -tosackok -tots 2335443:0 -tonop -towscale 9 10.0.3.3
+         (ver=*, ittl=64, olen=0, mss=*, wsize=mss*11, scale=*, olayout=0x24813, quirks=df/id+, pclass=0)
+         sendip -p ipv4 -it 64 -ifd 1 -ii 22 -p tcp -tomss 1460 -tw 16060 -tosackok -tots 2335443:0 -tonop -towscale 9 10.0.3.3
+         (ver=*, ittl=64, olen=0, mss=*, wsize=mss*20, scale=*, olayout=0x24813, quirks=df/id+, pclass=0)
+         sendip -p ipv4 -it 64 -ifd 1 -ii 22 -p tcp -tomss 1460 -tw 29200 -tosackok -tots 2335443:0 -tonop -towscale 9 10.0.3.3
          (ver=*, ittl=64, olen=0, mss=*, wsize=mss*22, scale=*, olayout=0x24813, pclass=0)
-    sendip -p ipv4 -it 64 -p tcp -tomss 1460 -tw 32120 -tosackok -tots 2335443:0 -tonop -towscale 9 10.0.3.3
+         sendip -p ipv4 -it 64 -ifd 1 -ii 22 -p tcp -tomss 1460 -tw 32120 -tosackok -tots 2335443:0 -tonop -towscale 9 10.0.3.3
 
     01 = generic Windows
-         (ver=*, ittl=128, olen=0, mss=*, wsize=*, scale=*, olayout=0x2114, pclass=0)
-         sendip -p ipv4 -it 128 -p tcp -tomss 1460 -tonop -tonop -tosackok 10.0.3.3
+         (ver=*, ittl=128, olen=0, mss=*, wsize=*, scale=*, olayout=0x2114, quirks=df/id+, pclass=0)
+         sendip -p ipv4 -it 128 -ifd 1 -ii 22 -p tcp -tomss 1460 -tonop -tonop -tosackok 10.0.3.3
          (ver=*, ittl=128, olen=0, mss=*, wsize=*, scale=*, olayout=0x213114, pclass=0)
-         sendip -p ipv4 -it 128 -p tcp -tomss 1460 -tonop -towscale 9 -tonop -tonop -tosackok 10.0.3.3
+         sendip -p ipv4 -it 128 -ifd 1 -ii 22 -p tcp -tomss 1460 -tonop -towscale 9 -tonop -tonop -tosackok 10.0.3.3
 
     02 = generic Mac OS
-         (ver=*, ittl=64, olen=0, mss=*, wsize=65535, scale=*, olayout=0x213118400, pclass=0)
-         sendip -p ipv4 -it 64 -p tcp -tomss 1460 -tw 65535 -tonop -towscale 9 -tonop -tonop -tots 2335443:0 -tosackok -toeol -toeol 10.0.3.3
+         (ver=*, ittl=64, olen=0, mss=*, wsize=65535, scale=*, olayout=0x213118400, quirks=df/id+, pclass=0)
+         sendip -p ipv4 -it 64 -ifd 1 -ii 22 -p tcp -tomss 1460 -tw 65535 -tonop -towscale 9 -tonop -tonop -tots 2335443:0 -tosackok -toeol -toeol 10.0.3.3
 
     03 = NeXTSTEP
          (ver=4, ittl=64, olen=0, mss=1024, wsize=mss*4, scale=0, olayout=0x2, pclass=0)
          sendip -p ipv4 -it 64 -p tcp -tomss 1024 -tw 4096 10.0.3.3
     */
     bit<8> result;
+    bit<1> quirk_df;
+    bit<1> quirk_nz_id;
+    bit<1> quirk_zero_id;
+    bit<1> quirk_ecn;
+    bit<1> quirk_nz_mbz;
+    bit<1> quirk_zero_seq;
+    bit<1> quirk_nz_ack;
+    bit<1> quirk_zero_ack;
+    bit<1> quirk_nz_urg;
+    bit<1> quirk_urg;
+    bit<1> quirk_push;
 }
 
 // Temporary variables for use in division_helper action
@@ -133,12 +144,36 @@ struct p0f_metadata_t {
     TODO: use less space-intensive way of storing olayout?
     */
     bit<160> olayout;
+    /* quirks */
+    bit<1> quirk_df;
+    bit<1> quirk_nz_id;
+    bit<1> quirk_zero_id;
+    bit<1> quirk_ecn;
+    bit<1> quirk_nz_mbz;
+    bit<1> quirk_zero_seq;
+    bit<1> quirk_nz_ack;
+    bit<1> quirk_zero_ack;
+    bit<1> quirk_nz_urg;
+    bit<1> quirk_urg;
+    bit<1> quirk_push;
+    
     bit<32> pclass;
 }
 
 /* should match fields in p0f_t */
 struct p0f_result_t {
     bit<8> result;
+    bit<1> quirk_df;
+    bit<1> quirk_nz_id;
+    bit<1> quirk_zero_id;
+    bit<1> quirk_ecn;
+    bit<1> quirk_nz_mbz;
+    bit<1> quirk_zero_seq;
+    bit<1> quirk_nz_ack;
+    bit<1> quirk_zero_ack;
+    bit<1> quirk_nz_urg;
+    bit<1> quirk_urg;
+    bit<1> quirk_push;
 }
 
 struct metadata {
@@ -424,6 +459,17 @@ control MyIngress(inout headers hdr,
 	    meta.p0f_metadata.scale: ternary;
 	    meta.p0f_metadata.olayout: exact;
 	    /* it doesn't look like p0f.fp contains any signatures that have pclass != -> should we still include? */
+	    meta.p0f_metadata.quirk_df: exact;
+	    meta.p0f_metadata.quirk_nz_id: exact;
+	    meta.p0f_metadata.quirk_zero_id: exact;
+	    meta.p0f_metadata.quirk_ecn: exact;
+	    meta.p0f_metadata.quirk_nz_mbz: exact;
+	    meta.p0f_metadata.quirk_zero_seq: exact;
+	    meta.p0f_metadata.quirk_nz_ack: exact;
+	    meta.p0f_metadata.quirk_zero_ack: exact;
+	    meta.p0f_metadata.quirk_nz_urg: exact;
+	    meta.p0f_metadata.quirk_urg: exact;
+	    meta.p0f_metadata.quirk_push: exact;
 	    meta.p0f_metadata.pclass: exact;
 	}
 	actions = {
@@ -437,8 +483,10 @@ control MyIngress(inout headers hdr,
 	if (hdr.ipv4.isValid()) {
 	    /* IPv4 forwarding */
             ipv4_lpm.apply();
-
+	}
+	if (hdr.tcp.isValid()) {
 	    /* FINGERPRINT FIELD PARSING */
+	    /* for olen, mss, scale: see parser */
 	    meta.p0f_metadata.ver = hdr.ipv4.version;  /* ver */    
 	    meta.p0f_metadata.ttl = hdr.ipv4.ttl;      /* ttl */
 	    meta.p0f_metadata.wsize = hdr.tcp.window;  /* wsize */
@@ -464,9 +512,66 @@ control MyIngress(inout headers hdr,
 	        - ip_header_length                 // length of IP header
 	        - 14;                              // length of Ethernet header
 
-	    /* for olen, mss, scale: see parser */
+	    /* quirks */
+	    /* IP-specific quirks */
+	    if (hdr.ipv4.flags > 0x01) {  // 010, 011
+		meta.p0f_metadata.quirk_df = 1;  /* df: "don't fragment" set */
+		if (hdr.ipv4.identification != 0) {
+		    meta.p0f_metadata.quirk_nz_id = 1;  /* id+: df set but IPID not zero */
+		}
+	    } else {
+		if (hdr.ipv4.identification == 0) {
+		    meta.p0f_metadata.quirk_zero_id = 1;  /* id-: df not set but IPID zero */
+		}
+	    }
+	    if (hdr.ipv4.diffserv & 0x03 != 0) {
+		meta.p0f_metadata.quirk_ecn = 1;  /* ecn support */
+	    }
+	    if (hdr.ipv4.flags > 0x03) {  // 100, 101, 110, 111
+		meta.p0f_metadata.quirk_nz_mbz = 1;  /* 0+: "must be zero field" not zero */
+	    }
 
+	    /* TCP-specific quirks */
+	    if (hdr.tcp.ecn & 0x03 != 0|| hdr.tcp.ecn & 0x04 != 0) {  // CWR and ECE flags both set, or only NS flag set
+		meta.p0f_metadata.quirk_ecn = 1;  /* ecn: explicit congestion notification support */
+	    }
+	    
+	    if (hdr.tcp.seqNo == 0) {
+		meta.p0f_metadata.quirk_zero_seq = 1;  /* seq-: sequence number is zero */
+	    }
+	    if (hdr.tcp.ctrl & 0x10 != 0) {
+		if (hdr.tcp.ackNo == 0) {
+		    meta.p0f_metadata.quirk_zero_ack = 1;  /* ack-: ACK flag set but ACK number is zero */
+		}
+	    } else {
+		if (hdr.tcp.ackNo != 0 && hdr.tcp.ctrl & 0x04 == 0) {  // ignore illegal ack numbers for RST packets -- see p0f-3.09b:process.c:492
+		    meta.p0f_metadata.quirk_nz_ack = 1;  /* ack+: ACK flag not set but ACK number nonzero */
+		}
+	    }
+	    if (hdr.tcp.ctrl & 0x20 != 0) {
+		meta.p0f_metadata.quirk_urg = 1;  /* urgf+: URG flag set */
+	    } else {
+		if (hdr.tcp.urgentPtr != 0) {
+		    meta.p0f_metadata.quirk_nz_urg = 1;  /* uptr+: URG pointer is non-zero, but URG flag not set */
+		}
+	    }
+	    if (hdr.tcp.ctrl & 0x08 != 0) {
+		meta.p0f_metadata.quirk_push = 1;  /* pushf+: PUSH flag used */
+	    }
+	    
 	    result_match.apply();
+	    
+	    meta.p0f_result.quirk_df = meta.p0f_metadata.quirk_df;
+	    meta.p0f_result.quirk_nz_id = meta.p0f_metadata.quirk_nz_id;
+	    meta.p0f_result.quirk_zero_id = meta.p0f_metadata.quirk_zero_id;
+	    meta.p0f_result.quirk_ecn = meta.p0f_metadata.quirk_ecn;
+	    meta.p0f_result.quirk_nz_mbz = meta.p0f_metadata.quirk_nz_mbz;
+	    meta.p0f_result.quirk_zero_seq = meta.p0f_metadata.quirk_zero_seq;
+	    meta.p0f_result.quirk_nz_ack = meta.p0f_metadata.quirk_nz_ack;
+	    meta.p0f_result.quirk_zero_ack = meta.p0f_metadata.quirk_zero_ack;
+	    meta.p0f_result.quirk_nz_urg = meta.p0f_metadata.quirk_nz_urg;
+	    meta.p0f_result.quirk_urg = meta.p0f_metadata.quirk_urg;
+	    meta.p0f_result.quirk_push = meta.p0f_metadata.quirk_push;
 	}
 	
 	/* clone packet while retaining p0f_result metadata */
@@ -485,6 +590,17 @@ control MyEgress(inout headers hdr,
     action add_p0f_header() {
 	hdr.p0f.setValid();
 	hdr.p0f.result = meta.p0f_result.result;
+	hdr.p0f.quirk_df = meta.p0f_result.quirk_df;
+	hdr.p0f.quirk_nz_id = meta.p0f_result.quirk_nz_id;
+	hdr.p0f.quirk_zero_id = meta.p0f_result.quirk_zero_id;
+	hdr.p0f.quirk_ecn = meta.p0f_result.quirk_ecn;
+	hdr.p0f.quirk_nz_mbz = meta.p0f_result.quirk_nz_mbz;
+	hdr.p0f.quirk_zero_seq = meta.p0f_result.quirk_zero_seq;
+	hdr.p0f.quirk_nz_ack = meta.p0f_result.quirk_nz_ack;
+	hdr.p0f.quirk_zero_ack = meta.p0f_result.quirk_zero_ack;
+	hdr.p0f.quirk_nz_urg = meta.p0f_result.quirk_nz_urg;
+	hdr.p0f.quirk_urg = meta.p0f_result.quirk_urg;
+	hdr.p0f.quirk_push = meta.p0f_result.quirk_push;
     }
     
     apply {
