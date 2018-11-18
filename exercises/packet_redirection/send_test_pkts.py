@@ -1,55 +1,76 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 
-# Usage: python send_test_pkts.py [host]
+# Usage: python send_test_pkts.py [destination address]
 
 import sys
-from random import randint
-from scapy.layers.inet import IP, TCP
-from scapy.sendrecv import send
+import random
+import socket
+
+from scapy.all import sendp, send, get_if_list, get_if_hwaddr
+from scapy.all import Packet
+from scapy.all import Ether, IP, TCP
 
 import read_fp
 
-HOST_TO_IP = {
-    'h1': '10.0.1.1',
-    'h2': '10.0.1.2',
-    'h3': '10.0.3.3'
-}
+
+def get_if():
+    ifs=get_if_list()
+    iface=None # "h1-eth0"
+    for i in get_if_list():
+        if "eth0" in i:
+            iface=i
+            break;
+    if not iface:
+        print("Cannot find eth0 interface")
+        exit(1)
+    return iface
 
 
-def send_pkt(sig, dst_ip):
+def send_pkt(sig, addr, iface):
+    print("Process signature: {}".format(sig.label))
+    
     # ignore sig.ver field: only IPv4 supported
 
     # choose TTL from range
-    rand_ttl = randint(sig.min_ttl, sig.ttl)
+    rand_ttl = random.randint(sig.min_ttl, sig.ttl)
 
+    # set up Ethernet packet
+    pkt = Ether(src=get_if_hwaddr(iface), dst='ff:ff:ff:ff:ff:ff')
+    
     # set up IP packet
-    ip = IP(
-        dst=dst_ip,
+    pkt = pkt / IP(
+        dst=addr,
         ttl=rand_ttl
     )
     
     # set up TCP SYN packet
-    tcp = ip / TCP(
+    pkt = pkt / TCP(
+        dport=1234,
+        sport=random.randint(49152,65535),
         flags='S',
         seq=1000
     )
-
-    # send TCP packet
-    send(tcp)
+    
+    print "sending on interface %s to %s" % (iface, str(addr))
+    pkt.show2()
+    sendp(pkt, iface=iface, verbose=False)
 
 
 def main():
-    dst_host = sys.argv[1]
-    if dst_host not in HOST_TO_IP:
-        raise Exception('Unknown host parameter.')
-    
+    if len(sys.argv)<2:
+        print 'pass 1 arguments: <destination address>>"'
+        exit(1)
+
+    addr = socket.gethostbyname(sys.argv[1])
+    iface = get_if()
+
+    print("reading signature list")
     signature_list = read_fp.read_fp_file()
-    sig = read_fp.process_signature(
-        'sig = *:64:0:*:mss*20,10:mss,sok,ts,nop,ws:df,id+:0',
-        'Linux 3.11 or newer'
-    )
-    # for sig in signature_list:
-    send_pkt(sig, dst_host)
+    
+    for sig in signature_list:
+        if sig.is_generic:
+            continue
+        send_pkt(sig, addr, iface)
 
 
 if __name__ == '__main__':
