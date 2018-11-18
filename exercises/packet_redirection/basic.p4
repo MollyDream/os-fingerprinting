@@ -70,6 +70,14 @@ header tcp_option_s_t {
     bit<8> scale;
 }
 
+
+header tcp_option_ts_t {
+    bit<8> kind;
+    bit<8> length;
+    bit<32> tsval;
+    bit<32> tsecr;
+}
+
 header tcp_option_sack_top_t {
     bit<8> kind;
     bit<8> length;
@@ -109,18 +117,23 @@ header p0f_t {
          (ver=4, ittl=64, olen=0, mss=1024, wsize=mss*4, scale=0, olayout=0x2, pclass=0)
          sendip -p ipv4 -it 64 -p tcp -tomss 1024 -tw 4096 10.0.3.3
     */
-    bit<8> result;
-    bit<1> quirk_df;
-    bit<1> quirk_nz_id;
-    bit<1> quirk_zero_id;
-    bit<1> quirk_ecn;
-    bit<1> quirk_nz_mbz;
-    bit<1> quirk_zero_seq;
-    bit<1> quirk_nz_ack;
-    bit<1> quirk_zero_ack;
-    bit<1> quirk_nz_urg;
-    bit<1> quirk_urg;
-    bit<1> quirk_push;
+    // bit<8> result;
+    // bit<1> quirk_df;
+    // bit<1> quirk_nz_id;
+    // bit<1> quirk_zero_id;
+    // bit<1> quirk_ecn;
+    // bit<1> quirk_nz_mbz;
+    // bit<1> quirk_zero_seq;
+    // bit<1> quirk_nz_ack;
+    // bit<1> quirk_zero_ack;
+    // bit<1> quirk_nz_urg;
+    // bit<1> quirk_urg;
+    // bit<1> quirk_push;
+    // bit<1> quirk_opt_zero_ts1;                   
+    // bit<1> quirk_opt_nz_ts2;
+    bit<1> quirk_opt_eol_nz;
+    bit<1> quirk_opt_exws;
+    // bit<1> quirk_opt_bad;
 }
 
 // Temporary variables for use in division_helper action
@@ -144,6 +157,7 @@ struct p0f_metadata_t {
     TODO: use less space-intensive way of storing olayout?
     */
     bit<160> olayout;
+
     /* quirks */
     bit<1> quirk_df;
     bit<1> quirk_nz_id;
@@ -156,6 +170,11 @@ struct p0f_metadata_t {
     bit<1> quirk_nz_urg;
     bit<1> quirk_urg;
     bit<1> quirk_push;
+    bit<1> quirk_opt_zero_ts1;                   
+    bit<1> quirk_opt_nz_ts2;
+    bit<1> quirk_opt_eol_nz;
+    bit<1> quirk_opt_exws;
+    bit<1> quirk_opt_bad;  // currently not used because we just reject incorrectly-formatted packets
     
     bit<32> pclass;
 }
@@ -174,6 +193,11 @@ struct p0f_result_t {
     bit<1> quirk_nz_urg;
     bit<1> quirk_urg;
     bit<1> quirk_push;
+    bit<1> quirk_opt_zero_ts1;                   
+    bit<1> quirk_opt_nz_ts2;
+    bit<1> quirk_opt_eol_nz;
+    bit<1> quirk_opt_exws;
+    bit<1> quirk_opt_bad;
 }
 
 struct metadata {
@@ -230,6 +254,8 @@ parser Tcp_option_parser(packet_in b,
                          out tcp_option_stack_t vec)
 {
     bit<9> tcp_hdr_bytes_left;
+    bit<1> own_timestamp_seen = 0;
+    bit<1> eol_seen = 0;
     
     state start {
         // RFC 793 - the Data Offset field is the length of the TCP
@@ -252,9 +278,14 @@ parser Tcp_option_parser(packet_in b,
 	// precondition: tcp_hdr_bytes_left >= 1
 	/* kind byte */
 	bit<8> kind = b.lookahead<bit<8>>();
+	
 	/* update olayout metadata field */
 	meta.p0f_metadata.olayout = (bit<160>) meta.p0f_metadata.olayout << 4;
 	meta.p0f_metadata.olayout = meta.p0f_metadata.olayout + (bit<160>) kind;
+	
+	/* update quirk_opt_eol_nz field */
+	meta.p0f_metadata.quirk_opt_eol_nz = (bit<1>) (meta.p0f_metadata.quirk_opt_eol_nz != 0 || (eol_seen != 0 && kind != 0));
+	
 	/* transition on kind */
         transition select(kind) {
 	    0: parse_tcp_option_end;
@@ -266,14 +297,13 @@ parser Tcp_option_parser(packet_in b,
 	    8: parse_tcp_option_timestamps;
         }
     }
+    
     state parse_tcp_option_end {
         verify(tcp_hdr_bytes_left >= 1, error.TcpOptionTooLongForHeader);
         tcp_hdr_bytes_left = tcp_hdr_bytes_left - 1;
         b.extract(vec.next, 0);
+	eol_seen = 1;
 	
-        // A more picky sub-parser implementation would verify that
-        // all of the remaining bytes are 0, as specified in RFC 793,
-        // setting an error and rejecting if not.
 	transition next_option;
     }
     
@@ -283,6 +313,7 @@ parser Tcp_option_parser(packet_in b,
         b.extract(vec.next, 0);
         transition next_option;
     }
+    
     state parse_tcp_option_ss {
         verify(tcp_hdr_bytes_left >= 4, error.TcpOptionTooLongForHeader);
 	/* set metadata field */
@@ -291,20 +322,25 @@ parser Tcp_option_parser(packet_in b,
         b.extract(vec.next, 3*8);
         transition next_option;
     }
+    
     state parse_tcp_option_s {
         verify(tcp_hdr_bytes_left >= 3, error.TcpOptionTooLongForHeader);
-	/* set metadata field */
+	/* set scale metadata field */
 	meta.p0f_metadata.scale = b.lookahead<tcp_option_s_t>().scale;
+	/* set excessive scale metadata field */
+	meta.p0f_metadata.quirk_opt_exws = (bit<1>) (meta.p0f_metadata.scale > 14);	
 	tcp_hdr_bytes_left = tcp_hdr_bytes_left - 3;
         b.extract(vec.next, 2*8);
         transition next_option;
     }
+    
     state parse_tcp_option_sack_permitted {
 	verify(tcp_hdr_bytes_left >= 2, error.TcpOptionTooLongForHeader);
 	tcp_hdr_bytes_left = tcp_hdr_bytes_left - 2;
 	b.extract(vec.next, 1*8);
 	transition next_option;
     }
+    
     state parse_tcp_option_sack {
         bit<8> n_sack_bytes = b.lookahead<tcp_option_sack_top_t>().length;
         // I do not have global knowledge of all TCP SACK
@@ -320,8 +356,19 @@ parser Tcp_option_parser(packet_in b,
         b.extract(vec.next, (bit<32>) (8 * n_sack_bytes - 16));
         transition next_option;
     }
+    
     state parse_tcp_option_timestamps {
 	verify(tcp_hdr_bytes_left >= 10, error.TcpOptionTooLongForHeader);
+	bit<32> tsval = b.lookahead<tcp_option_ts_t>().tsval;
+	
+	// set flag if own timestamp is zero
+	meta.p0f_metadata.quirk_opt_zero_ts1 = (bit<1>) ((own_timestamp_seen != 0 && meta.p0f_metadata.quirk_opt_zero_ts1 != 0) || (own_timestamp_seen == 0 && tsval == 0));
+
+	// set flag if peer timestamp is nonzero
+	meta.p0f_metadata.quirk_opt_nz_ts2 = (bit<1>) (meta.p0f_metadata.quirk_opt_nz_ts2 != 0 || (own_timestamp_seen != 0 && tsval != 0));
+
+	own_timestamp_seen = 1;
+	
 	tcp_hdr_bytes_left = tcp_hdr_bytes_left - 10;
 	b.extract(vec.next, 9*8);
 	transition next_option;
@@ -572,6 +619,12 @@ control MyIngress(inout headers hdr,
 	    meta.p0f_result.quirk_nz_urg = meta.p0f_metadata.quirk_nz_urg;
 	    meta.p0f_result.quirk_urg = meta.p0f_metadata.quirk_urg;
 	    meta.p0f_result.quirk_push = meta.p0f_metadata.quirk_push;
+	    meta.p0f_result.quirk_opt_zero_ts1 = meta.p0f_metadata.quirk_opt_zero_ts1;
+	    meta.p0f_result.quirk_opt_nz_ts2 = meta.p0f_metadata.quirk_opt_nz_ts2;
+	    meta.p0f_result.quirk_opt_eol_nz = meta.p0f_metadata.quirk_opt_eol_nz;
+	    meta.p0f_result.quirk_opt_exws = meta.p0f_metadata.quirk_opt_exws;
+	    meta.p0f_result.quirk_opt_bad = meta.p0f_metadata.quirk_opt_bad;
+
 	}
 	
 	/* clone packet while retaining p0f_result metadata */
@@ -589,18 +642,23 @@ control MyEgress(inout headers hdr,
     /* encapsulate packet with p0f header */
     action add_p0f_header() {
 	hdr.p0f.setValid();
-	hdr.p0f.result = meta.p0f_result.result;
-	hdr.p0f.quirk_df = meta.p0f_result.quirk_df;
-	hdr.p0f.quirk_nz_id = meta.p0f_result.quirk_nz_id;
-	hdr.p0f.quirk_zero_id = meta.p0f_result.quirk_zero_id;
-	hdr.p0f.quirk_ecn = meta.p0f_result.quirk_ecn;
-	hdr.p0f.quirk_nz_mbz = meta.p0f_result.quirk_nz_mbz;
-	hdr.p0f.quirk_zero_seq = meta.p0f_result.quirk_zero_seq;
-	hdr.p0f.quirk_nz_ack = meta.p0f_result.quirk_nz_ack;
-	hdr.p0f.quirk_zero_ack = meta.p0f_result.quirk_zero_ack;
-	hdr.p0f.quirk_nz_urg = meta.p0f_result.quirk_nz_urg;
-	hdr.p0f.quirk_urg = meta.p0f_result.quirk_urg;
-	hdr.p0f.quirk_push = meta.p0f_result.quirk_push;
+	// hdr.p0f.result = meta.p0f_result.result;
+	// hdr.p0f.quirk_df = meta.p0f_result.quirk_df;
+	// hdr.p0f.quirk_nz_id = meta.p0f_result.quirk_nz_id;
+	// hdr.p0f.quirk_zero_id = meta.p0f_result.quirk_zero_id;
+	// hdr.p0f.quirk_ecn = meta.p0f_result.quirk_ecn;
+	// hdr.p0f.quirk_nz_mbz = meta.p0f_result.quirk_nz_mbz;
+	// hdr.p0f.quirk_zero_seq = meta.p0f_result.quirk_zero_seq;
+	// hdr.p0f.quirk_nz_ack = meta.p0f_result.quirk_nz_ack;
+	// hdr.p0f.quirk_zero_ack = meta.p0f_result.quirk_zero_ack;
+	// hdr.p0f.quirk_nz_urg = meta.p0f_result.quirk_nz_urg;
+	// hdr.p0f.quirk_urg = meta.p0f_result.quirk_urg;
+	// hdr.p0f.quirk_push = meta.p0f_result.quirk_push;
+	// hdr.p0f.quirk_opt_zero_ts1 = meta.p0f_result.quirk_opt_zero_ts1;
+	// hdr.p0f.quirk_opt_nz_ts2 = meta.p0f_result.quirk_opt_nz_ts2;
+	hdr.p0f.quirk_opt_eol_nz = meta.p0f_result.quirk_opt_eol_nz;
+	hdr.p0f.quirk_opt_exws = meta.p0f_result.quirk_opt_exws;
+	// hdr.p0f.quirk_opt_bad = meta.p0f_result.quirk_opt_bad;
     }
     
     apply {
