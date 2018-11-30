@@ -71,7 +71,7 @@ def encode(x, bitwidth):
         else:
             # Assume that the string is already encoded
             encoded_bytes = x
-    elif type(x) == int:
+    elif type(x) == int or type(x) == long:
         encoded_bytes = encodeNum(x, bitwidth)
     else:
         raise Exception("Encoding objects of %r is not supported" % type(x))

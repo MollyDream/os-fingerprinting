@@ -9,6 +9,9 @@ FP_PATH = 'p0f.fp'
 # Used to calculate minimum TTL accepted for some signature
 MAX_DIST = 35
 
+# Map integer ids to labels
+id_to_label_dict = {}
+
 class P0fSignature(object):
     def __init__(self, label, label_id, match_fields, is_fuzzy=False):
         self.label = label
@@ -85,7 +88,13 @@ class P0fRuleMatchFields(object):
                           if v is not None}
 
         return formatted_dict
-        
+
+
+# convert label id to label name
+def id_to_label(label_id):
+    read_fp_file()
+    return id_to_label_dict[label_id]
+
         
 def read_fp_file():
     # list of table entries
@@ -141,6 +150,7 @@ def read_fp_file():
                     raise Exception('Cannot determine if signature group label'
                                     'is specific or generic')
                 curr_label_id += 1
+                id_to_label_dict[curr_label_id] = curr_label
 
             # line contains 'sys': describes expected operating systems for this
             # particular application label

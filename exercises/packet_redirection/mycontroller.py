@@ -68,9 +68,9 @@ def writeP0fRules(p4info_helper, sw):
     sig_list = read_fp.read_fp_file()
 
     # Base priorities
-    s_priority = len(sig_list)*3  # Highest priority for specific rules
-    g_priority = len(sig_list)*2  # Highest priority for generic rules
-    f_priority = len(sig_list)  # Highest priority for fuzzy rules
+    s_priority = 1  # Base priority for specific rules
+    g_priority = len(sig_list) + 1  # Base priority for generic rules
+    f_priority = 2*len(sig_list) + 1  # Base priority for fuzzy rules
     
     # Iterate over all signatures in order
     # Signatures appearing earlier are assigned higher priorities
@@ -79,13 +79,13 @@ def writeP0fRules(p4info_helper, sw):
         sig_priority = 0
         if sig.is_generic:
             sig_priority = g_priority
-            g_priority -= 1
+            g_priority += 1
         elif sig.is_fuzzy:
             sig_priority = f_priority
-            f_priority -= 1
+            f_priority += 1
         else:
             sig_priority = s_priority
-            s_priority -= 1
+            s_priority += 1
 
         # Create table entry
         # All fields in sig object belong to the p0f_metadata struct
@@ -100,19 +100,13 @@ def writeP0fRules(p4info_helper, sw):
             priority=sig_priority
         )
 
-        print("Writing {} {} p0f rule for {} on {}" \
-              .format("generic" if sig.is_generic else "specific",
-                      "fuzzy" if sig.is_fuzzy else "non-fuzzy",
-                      sig.label,
-                      sw.name))
-        pprint(sig.match_fields.as_dict(prefix=match_field_prefix))
-
         # Write table entry
         sw.WriteTableEntry(table_entry)
-        print("Installed {} {} p0f rule for {} on {}" \
+        print("Installed {} {} p0f rule for {} (id {}) on {}" \
               .format("generic" if sig.is_generic else "specific",
                       "fuzzy" if sig.is_fuzzy else "non-fuzzy",
                       sig.label,
+                      sig.label_id,
                       sw.name))
         
     print("Installed all p0f rules on {}".format(sw.name))
@@ -224,8 +218,8 @@ def main(p4info_file_path, bmv2_file_path):
         writeP0fRules(p4info_helper, s1)
 
         # Read and print table rules for s1 and s3
-        readTableRules(p4info_helper, s1)
-        readTableRules(p4info_helper, s3)
+        # readTableRules(p4info_helper, s1)
+        # readTableRules(p4info_helper, s3)
 
     except KeyboardInterrupt:
         print " Shutting down."

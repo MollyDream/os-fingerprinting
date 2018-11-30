@@ -93,30 +93,6 @@ error {
 }
 
 header p0f_t {
-    /* 
-    for now: 
-    00 = generic Linux 
-         (ver=*, ittl=64, olen=0, mss=*, wsize=mss*11, scale=*, olayout=0x24813, quirks=df/id+, pclass=0)
-         sendip -p ipv4 -it 64 -ifd 1 -ii 22 -p tcp -tomss 1460 -tw 16060 -tosackok -tots 2335443:0 -tonop -towscale 9 10.0.3.3
-         (ver=*, ittl=64, olen=0, mss=*, wsize=mss*20, scale=*, olayout=0x24813, quirks=df/id+, pclass=0)
-         sendip -p ipv4 -it 64 -ifd 1 -ii 22 -p tcp -tomss 1460 -tw 29200 -tosackok -tots 2335443:0 -tonop -towscale 9 10.0.3.3
-         (ver=*, ittl=64, olen=0, mss=*, wsize=mss*22, scale=*, olayout=0x24813, pclass=0)
-         sendip -p ipv4 -it 64 -ifd 1 -ii 22 -p tcp -tomss 1460 -tw 32120 -tosackok -tots 2335443:0 -tonop -towscale 9 10.0.3.3
-
-    01 = generic Windows
-         (ver=*, ittl=128, olen=0, mss=*, wsize=*, scale=*, olayout=0x2114, quirks=df/id+, pclass=0)
-         sendip -p ipv4 -it 128 -ifd 1 -ii 22 -p tcp -tomss 1460 -tonop -tonop -tosackok 10.0.3.3
-         (ver=*, ittl=128, olen=0, mss=*, wsize=*, scale=*, olayout=0x213114, pclass=0)
-         sendip -p ipv4 -it 128 -ifd 1 -ii 22 -p tcp -tomss 1460 -tonop -towscale 9 -tonop -tonop -tosackok 10.0.3.3
-
-    02 = generic Mac OS
-         (ver=*, ittl=64, olen=0, mss=*, wsize=65535, scale=*, olayout=0x213118400, quirks=df/id+, pclass=0)
-         sendip -p ipv4 -it 64 -ifd 1 -ii 22 -p tcp -tomss 1460 -tw 65535 -tonop -towscale 9 -tonop -tonop -tots 2335443:0 -tosackok -toeol -toeol 10.0.3.3
-
-    03 = NeXTSTEP
-         (ver=4, ittl=64, olen=0, mss=1024, wsize=mss*4, scale=0, olayout=0x2, pclass=0)
-         sendip -p ipv4 -it 64 -p tcp -tomss 1024 -tw 4096 10.0.3.3
-    */
     bit<8> result;
 }
 
