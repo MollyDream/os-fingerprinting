@@ -17,11 +17,6 @@ class P0fSignature(object):
         self.is_fuzzy = is_fuzzy
         self.match_fields = match_fields
 
-    def get_match_fields_dict(self):
-        match_fields_dict = vars(self.match_fields)
-        # strip None values from dict
-        return {k: v for (k, v) in match_fields_dict.items() if v is not None}
-        
 
 class P0fRuleMatchFields(object):
     def __init__(self):
@@ -52,7 +47,46 @@ class P0fRuleMatchFields(object):
         self.quirk_opt_bad = 0
         self.pclass = None
 
+    def set_ternary_field(self, value, size):
+        return None if not value else [value, 2**size-1]
+        
+    def as_dict(self, prefix=""):
+        match_fields_dict = {
+            "ver": self.set_ternary_field(self.ver, 4),
+            "ttl": [self.min_ttl, self.ttl],
+            "olen": self.olen,
+            "mss": self.set_ternary_field(self.mss, 16),
+            "wsize": self.set_ternary_field(self.wsize, 16),
+            "wsize_div_mss": self.set_ternary_field(self.wsize_div_mss, 16),
+            "scale": self.set_ternary_field(self.scale, 8),
+            "olayout": self.olayout,
+            "quirk_df": self.set_ternary_field(self.quirk_df, 1),
+            "quirk_nz_id": self.set_ternary_field(self.quirk_nz_id, 1),
+            "quirk_zero_id": self.set_ternary_field(self.quirk_zero_id, 1),
+            "quirk_ecn": self.set_ternary_field(self.quirk_ecn, 1),
+            "quirk_nz_mbz": self.quirk_nz_mbz,
+            "quirk_zero_seq": self.quirk_zero_seq,
+            "quirk_nz_ack": self.quirk_nz_ack,
+            "quirk_zero_ack": self.quirk_zero_ack,
+            "quirk_nz_urg": self.quirk_nz_urg,
+            "quirk_urg": self.quirk_urg,
+            "quirk_push": self.quirk_push,
+            "quirk_opt_zero_ts1": self.quirk_opt_zero_ts1,      
+            "quirk_opt_nz_ts2": self.quirk_opt_nz_ts2,
+            "quirk_opt_eol_nz": self.quirk_opt_eol_nz,
+            "quirk_opt_exws": self.quirk_opt_exws,
+            "quirk_opt_bad": self.quirk_opt_bad,
+            "pclass": 0
+        }
 
+        # filter out None values (wildcard) and append prefix
+        formatted_dict = {(prefix+k): v \
+                          for (k, v) in match_fields_dict.items() \
+                          if v is not None}
+
+        return formatted_dict
+        
+        
 def read_fp_file():
     # list of table entries
     signature_list = []
@@ -159,7 +193,7 @@ def read_fp_file():
                                                         curr_label_id,
                                                         fuzzy_match_fields,
                                                         is_fuzzy=True)
-                        signature_list.append(fuzzy_sig_object)
+                        # signature_list.append(fuzzy_sig_object)
 
             else:
                 raise Exception('Malformed line in TCP SYN section of '

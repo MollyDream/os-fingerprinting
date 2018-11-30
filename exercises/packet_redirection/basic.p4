@@ -117,23 +117,7 @@ header p0f_t {
          (ver=4, ittl=64, olen=0, mss=1024, wsize=mss*4, scale=0, olayout=0x2, pclass=0)
          sendip -p ipv4 -it 64 -p tcp -tomss 1024 -tw 4096 10.0.3.3
     */
-    // bit<8> result;
-    // bit<1> quirk_df;
-    // bit<1> quirk_nz_id;
-    // bit<1> quirk_zero_id;
-    // bit<1> quirk_ecn;
-    // bit<1> quirk_nz_mbz;
-    // bit<1> quirk_zero_seq;
-    // bit<1> quirk_nz_ack;
-    // bit<1> quirk_zero_ack;
-    // bit<1> quirk_nz_urg;
-    // bit<1> quirk_urg;
-    // bit<1> quirk_push;
-    // bit<1> quirk_opt_zero_ts1;                   
-    // bit<1> quirk_opt_nz_ts2;
-    bit<1> quirk_opt_eol_nz;
-    bit<1> quirk_opt_exws;
-    // bit<1> quirk_opt_bad;
+    bit<8> result;
 }
 
 // Temporary variables for use in division_helper action
@@ -182,22 +166,6 @@ struct p0f_metadata_t {
 /* should match fields in p0f_t */
 struct p0f_result_t {
     bit<8> result;
-    bit<1> quirk_df;
-    bit<1> quirk_nz_id;
-    bit<1> quirk_zero_id;
-    bit<1> quirk_ecn;
-    bit<1> quirk_nz_mbz;
-    bit<1> quirk_zero_seq;
-    bit<1> quirk_nz_ack;
-    bit<1> quirk_zero_ack;
-    bit<1> quirk_nz_urg;
-    bit<1> quirk_urg;
-    bit<1> quirk_push;
-    bit<1> quirk_opt_zero_ts1;                   
-    bit<1> quirk_opt_nz_ts2;
-    bit<1> quirk_opt_eol_nz;
-    bit<1> quirk_opt_exws;
-    bit<1> quirk_opt_bad;
 }
 
 struct metadata {
@@ -506,10 +474,10 @@ control MyIngress(inout headers hdr,
 	    meta.p0f_metadata.scale: ternary;
 	    meta.p0f_metadata.olayout: exact;
 	    /* it doesn't look like p0f.fp contains any signatures that have pclass != -> should we still include? */
-	    meta.p0f_metadata.quirk_df: exact;
-	    meta.p0f_metadata.quirk_nz_id: exact;
-	    meta.p0f_metadata.quirk_zero_id: exact;
-	    meta.p0f_metadata.quirk_ecn: exact;
+	    meta.p0f_metadata.quirk_df: ternary;
+	    meta.p0f_metadata.quirk_nz_id: ternary;
+	    meta.p0f_metadata.quirk_zero_id: ternary;
+	    meta.p0f_metadata.quirk_ecn: ternary;
 	    meta.p0f_metadata.quirk_nz_mbz: exact;
 	    meta.p0f_metadata.quirk_zero_seq: exact;
 	    meta.p0f_metadata.quirk_nz_ack: exact;
@@ -517,6 +485,11 @@ control MyIngress(inout headers hdr,
 	    meta.p0f_metadata.quirk_nz_urg: exact;
 	    meta.p0f_metadata.quirk_urg: exact;
 	    meta.p0f_metadata.quirk_push: exact;
+	    meta.p0f_metadata.quirk_opt_zero_ts1: exact;                   
+	    meta.p0f_metadata.quirk_opt_nz_ts2: exact;
+	    meta.p0f_metadata.quirk_opt_eol_nz: exact;
+	    meta.p0f_metadata.quirk_opt_exws: exact;
+	    meta.p0f_metadata.quirk_opt_bad: exact;
 	    meta.p0f_metadata.pclass: exact;
 	}
 	actions = {
@@ -608,23 +581,6 @@ control MyIngress(inout headers hdr,
 	    
 	    result_match.apply();
 	    
-	    meta.p0f_result.quirk_df = meta.p0f_metadata.quirk_df;
-	    meta.p0f_result.quirk_nz_id = meta.p0f_metadata.quirk_nz_id;
-	    meta.p0f_result.quirk_zero_id = meta.p0f_metadata.quirk_zero_id;
-	    meta.p0f_result.quirk_ecn = meta.p0f_metadata.quirk_ecn;
-	    meta.p0f_result.quirk_nz_mbz = meta.p0f_metadata.quirk_nz_mbz;
-	    meta.p0f_result.quirk_zero_seq = meta.p0f_metadata.quirk_zero_seq;
-	    meta.p0f_result.quirk_nz_ack = meta.p0f_metadata.quirk_nz_ack;
-	    meta.p0f_result.quirk_zero_ack = meta.p0f_metadata.quirk_zero_ack;
-	    meta.p0f_result.quirk_nz_urg = meta.p0f_metadata.quirk_nz_urg;
-	    meta.p0f_result.quirk_urg = meta.p0f_metadata.quirk_urg;
-	    meta.p0f_result.quirk_push = meta.p0f_metadata.quirk_push;
-	    meta.p0f_result.quirk_opt_zero_ts1 = meta.p0f_metadata.quirk_opt_zero_ts1;
-	    meta.p0f_result.quirk_opt_nz_ts2 = meta.p0f_metadata.quirk_opt_nz_ts2;
-	    meta.p0f_result.quirk_opt_eol_nz = meta.p0f_metadata.quirk_opt_eol_nz;
-	    meta.p0f_result.quirk_opt_exws = meta.p0f_metadata.quirk_opt_exws;
-	    meta.p0f_result.quirk_opt_bad = meta.p0f_metadata.quirk_opt_bad;
-
 	}
 	
 	/* clone packet while retaining p0f_result metadata */
@@ -642,23 +598,7 @@ control MyEgress(inout headers hdr,
     /* encapsulate packet with p0f header */
     action add_p0f_header() {
 	hdr.p0f.setValid();
-	// hdr.p0f.result = meta.p0f_result.result;
-	// hdr.p0f.quirk_df = meta.p0f_result.quirk_df;
-	// hdr.p0f.quirk_nz_id = meta.p0f_result.quirk_nz_id;
-	// hdr.p0f.quirk_zero_id = meta.p0f_result.quirk_zero_id;
-	// hdr.p0f.quirk_ecn = meta.p0f_result.quirk_ecn;
-	// hdr.p0f.quirk_nz_mbz = meta.p0f_result.quirk_nz_mbz;
-	// hdr.p0f.quirk_zero_seq = meta.p0f_result.quirk_zero_seq;
-	// hdr.p0f.quirk_nz_ack = meta.p0f_result.quirk_nz_ack;
-	// hdr.p0f.quirk_zero_ack = meta.p0f_result.quirk_zero_ack;
-	// hdr.p0f.quirk_nz_urg = meta.p0f_result.quirk_nz_urg;
-	// hdr.p0f.quirk_urg = meta.p0f_result.quirk_urg;
-	// hdr.p0f.quirk_push = meta.p0f_result.quirk_push;
-	// hdr.p0f.quirk_opt_zero_ts1 = meta.p0f_result.quirk_opt_zero_ts1;
-	// hdr.p0f.quirk_opt_nz_ts2 = meta.p0f_result.quirk_opt_nz_ts2;
-	hdr.p0f.quirk_opt_eol_nz = meta.p0f_result.quirk_opt_eol_nz;
-	hdr.p0f.quirk_opt_exws = meta.p0f_result.quirk_opt_exws;
-	// hdr.p0f.quirk_opt_bad = meta.p0f_result.quirk_opt_bad;
+	hdr.p0f.result = meta.p0f_result.result;
     }
     
     apply {

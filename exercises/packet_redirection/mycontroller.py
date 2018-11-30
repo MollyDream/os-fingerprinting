@@ -3,7 +3,9 @@ import argparse
 import grpc
 import os
 import sys
+import read_fp
 from time import sleep
+from pprint import pprint
 
 # Import P4Runtime lib from parent utils dir
 # Probably there's a better way of doing this.
@@ -60,6 +62,60 @@ def writeIpv4ForwardingRules(p4info_helper,
     egress_sw.WriteTableEntry(table_entry)
     print "Installed egress IPv4 forwarding rule on %s" % egress_sw.name
 
+
+def writeP0fRules(p4info_helper, sw):
+    # Read signature list
+    sig_list = read_fp.read_fp_file()
+
+    # Base priorities
+    s_priority = len(sig_list)*3  # Highest priority for specific rules
+    g_priority = len(sig_list)*2  # Highest priority for generic rules
+    f_priority = len(sig_list)  # Highest priority for fuzzy rules
+    
+    # Iterate over all signatures in order
+    # Signatures appearing earlier are assigned higher priorities
+    for sig in sig_list:
+        # Determine priority
+        sig_priority = 0
+        if sig.is_generic:
+            sig_priority = g_priority
+            g_priority -= 1
+        elif sig.is_fuzzy:
+            sig_priority = f_priority
+            f_priority -= 1
+        else:
+            sig_priority = s_priority
+            s_priority -= 1
+
+        # Create table entry
+        # All fields in sig object belong to the p0f_metadata struct
+        match_field_prefix = 'meta.p0f_metadata.'
+        table_entry = p4info_helper.buildTableEntry(
+            table_name="MyIngress.result_match",
+            match_fields=sig.match_fields.as_dict(prefix=match_field_prefix),
+            action_name="MyIngress.set_result",
+            action_params={
+                "result": sig.label_id
+            },
+            priority=sig_priority
+        )
+
+        print("Writing {} {} p0f rule for {} on {}" \
+              .format("generic" if sig.is_generic else "specific",
+                      "fuzzy" if sig.is_fuzzy else "non-fuzzy",
+                      sig.label,
+                      sw.name))
+        pprint(sig.match_fields.as_dict(prefix=match_field_prefix))
+
+        # Write table entry
+        sw.WriteTableEntry(table_entry)
+        print("Installed {} {} p0f rule for {} on {}" \
+              .format("generic" if sig.is_generic else "specific",
+                      "fuzzy" if sig.is_fuzzy else "non-fuzzy",
+                      sig.label,
+                      sw.name))
+        
+    print("Installed all p0f rules on {}".format(sw.name))
 
 def readTableRules(p4info_helper, sw):
     """
@@ -155,7 +211,7 @@ def main(p4info_file_path, bmv2_file_path):
                                  dst_eth_addr="00:00:00:00:03:03",
                                  dst_ip_addr="10.0.3.3")
 
-        # Write the rule that forwards traffic from h3 to h1
+        # Write the rules that forward traffic from h3 to h1
         writeIpv4ForwardingRules(p4info_helper,
                                  ingress_sw=s3,
                                  egress_sw=s1,
@@ -163,6 +219,9 @@ def main(p4info_file_path, bmv2_file_path):
                                  egress_port=1,
                                  dst_eth_addr="00:00:00:00:01:01",
                                  dst_ip_addr="10.0.1.1")
+
+        # Write p0f rules to s1
+        writeP0fRules(p4info_helper, s1)
 
         # Read and print table rules for s1 and s3
         readTableRules(p4info_helper, s1)
