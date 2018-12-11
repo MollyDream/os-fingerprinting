@@ -25,6 +25,10 @@ class P0fSignature(object):
         self.match_fields = match_fields
 
     def get_match_fields_dict(self):
+        '''
+        :return: A dict containing all match fields for the table rule
+                 corresponding to this P0fSignature object
+        '''
         return self.match_fields.as_dict()
 
 # store just information for the match fields of a table rule
@@ -59,6 +63,10 @@ class P0fRuleMatchFields(object):
         self.pclass = None
 
     def as_dict(self):
+        '''
+        :return: A dict containing all match fields for the table rule
+                 corresponding to this P0fRuleMatchFields object
+        '''
         match_fields_dict = {
             "ver": _set_ternary_field(self.ver, 4),
             "ttl": _set_range_field(self.min_ttl, self.ttl),
@@ -95,9 +103,13 @@ class P0fRuleMatchFields(object):
         return formatted_dict
 
 
-# read fingerprint file and process signatures
-# then assign each signature a priority
 def get_signature_list():
+    '''
+    Get a list of complete P0fSignature objects from a fingerprint
+    database file.
+
+    :return: A list of P0fSignature objects:
+    '''
     signature_list = _read_fp_file()
     _assign_priorities(signature_list)
     return signature_list    
@@ -105,12 +117,26 @@ def get_signature_list():
 
 # convert label id to label name
 def id_to_label(label_id):
+    '''
+    :param: A string containing the name of a label
+    :return: An int containing the integer id of the label
+    '''
     _read_fp_file()  # TODO: is this necessary?
     return id_to_label_dict[label_id]
 
 
-# assign priorities to each signature in signature list
 def _assign_priorities(signature_list):
+    '''
+    Assigns a priority to each signature in signature_list depending on
+    the following factors:
+    (1) if the signature is specific/generic
+    (2) if the signature is fuzzy/non-fuzzy
+    (3) the signature's position (line number) in the database relative
+        to the other signatures
+
+    :param signature_list: A list of P0fSignature objects
+    :return:
+    '''
     # Base priorities
     s_priority = 1  # Base priority for specific rules
     g_priority = len(signature_list) + 1  # Base priority for generic rules
@@ -129,8 +155,15 @@ def _assign_priorities(signature_list):
             s_priority += 1
 
 
-# process one p0f signature line
 def _process_match_fields(line_cleaned):
+    '''
+    Translate one line of the fingerprint database file containing one
+    signature into a P0fRuleMatchFields object.
+    
+    :param line_cleaned: A line from the fingerprint database containing
+                         one (non-fuzzy) signature
+    :return: A tuple of type (P0fRuleMatchFields, bool) 
+    '''
     # flag for if we have encountered a "bad_ttl"
     # (ttl ends in '-')
     bad_ttl = False
@@ -290,9 +323,13 @@ def _process_match_fields(line_cleaned):
         
     return (match_fields, bad_ttl)
 
-# read in fingerprints from fingerprint database file
-# return list of P0fSignature objects
 def _read_fp_file():
+    '''
+    Read in fingerprints from the fingerprint database file and return
+    a list of P0fSignature objects.
+    
+    :return: A list of P0fSignature objects
+    '''
     # list of table entries
     signature_list = []
     
@@ -408,16 +445,33 @@ def _read_fp_file():
     return signature_list
 
 
-# for use in P0fRuleMatchFields.as_dict
 def _set_range_field(min_value, max_value):
+    '''
+    Set a range field in the dictionary representation of a
+    P0fRuleMatchFields object.
+
+    :param min_value: The minimum int in the range
+    :param max_value: The maximum int in the range
+    :return: None if either min_value or max_value are None
+             else a list containing the two parameters
+    '''
     if (min_value is None) or (max_value is None):
         return None
     
     return [min_value, max_value]
 
 
-# for use in P0fRuleMatchFields.as_dict
 def _set_ternary_field(value, size):
+    '''
+    Set a wildcard field in the dictionary representation of a
+    P0fRuleMatchFields object.
+    
+    :param value: The value of the ternary field
+                  If None, this field should be a wildcard
+    :param size: The size of this field, in bits
+    :return: None if value is None
+             else a list of type [int, int]
+    '''
     return None if (value is None) else [value, 2**size-1]
 
 
