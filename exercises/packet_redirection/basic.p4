@@ -6,6 +6,12 @@ const bit<32> MIRROR_SESSION_ID = 250;
 const bit<16> TYPE_IPV4 = 0x800;
 const bit<8> TYPE_TCP = 6;
 
+// TCP control field values
+const bit<6> TYPE_SYN = 0x02;          // 000010
+const bit<6> TYPE_SYN_URG = 0x22;      // 100010
+const bit<6> TYPE_SYN_PSH = 0x0A;      // 001010
+const bit<6> TYPE_SYN_URG_PSH = 0x2A;  // 101010
+
 /*************************************************************************
 *********************** H E A D E R S  ***********************************
 *************************************************************************/
@@ -476,11 +482,14 @@ control MyIngress(inout headers hdr,
     }
     
     apply {
-	if (hdr.ipv4.isValid()) {
-	    /* IPv4 forwarding */
-            ipv4_lpm.apply();
-	}
-	if (hdr.tcp.isValid()) {
+	/* only fingerprint TCP packets with SYN flag set
+	 * and ACK, RST, FIN not set
+	 */
+	if (hdr.tcp.isValid()
+	    && (hdr.tcp.ctrl == TYPE_SYN
+		|| hdr.tcp.ctrl == TYPE_SYN_URG
+		|| hdr.tcp.ctrl == TYPE_SYN_PSH
+		|| hdr.tcp.ctrl == TYPE_SYN_URG_PSH)) {
 	    /* FINGERPRINT FIELD PARSING */
 	    /* for olen, mss, scale: see parser */
 	    meta.p0f_metadata.ver = hdr.ipv4.version;  /* ver */    
@@ -554,13 +563,18 @@ control MyIngress(inout headers hdr,
 	    if (hdr.tcp.ctrl & 0x08 != 0) {
 		meta.p0f_metadata.quirk_push = 1;  /* pushf+: PUSH flag used */
 	    }
-	    
+
+	    /* set meta.p0f_result field */
 	    result_match.apply();
-	    
+
+	    /* clone packet while retaining p0f_result metadata */
+	    clone3<p0f_result_t>(CloneType.I2E, MIRROR_SESSION_ID, meta.p0f_result);
 	}
-	
-	/* clone packet while retaining p0f_result metadata */
-	clone3<p0f_result_t>(CloneType.I2E, MIRROR_SESSION_ID, meta.p0f_result);
+
+	if (hdr.ipv4.isValid()) {
+	    /* IPv4 forwarding */
+            ipv4_lpm.apply();
+	}
     }
 }
 
