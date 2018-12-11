@@ -3,11 +3,14 @@
 import os
 import sys
 from copy import deepcopy
+from pprint import pprint
 
 # Path of fingerprint database file
 FP_PATH = 'p0f.fp'
 # Used to calculate minimum TTL accepted for some signature
 MAX_DIST = 35
+# Prefix for each metadata field in P4 file
+PREFIX = 'meta.p0f_metadata.'
 
 # Map integer ids to labels
 id_to_label_dict = {}
@@ -18,9 +21,14 @@ class P0fSignature(object):
         self.label_id = label_id 
 	self.is_generic = True if label.startswith('g:') else False
         self.is_fuzzy = is_fuzzy
+        self.priority = 0
         self.match_fields = match_fields
 
+    def get_match_fields_dict(self):
+        return self.match_fields.as_dict()
 
+# store just information for the match fields of a table rule
+# that correspond to one (fuzzy or non-fuzzy) p0f signature
 class P0fRuleMatchFields(object):
     def __init__(self):
         self.ver = None
@@ -50,23 +58,20 @@ class P0fRuleMatchFields(object):
         self.quirk_opt_bad = 0
         self.pclass = None
 
-    def set_ternary_field(self, value, size):
-        return None if not value else [value, 2**size-1]
-        
-    def as_dict(self, prefix=""):
+    def as_dict(self):
         match_fields_dict = {
-            "ver": self.set_ternary_field(self.ver, 4),
-            "ttl": [self.min_ttl, self.ttl],
+            "ver": _set_ternary_field(self.ver, 4),
+            "ttl": _set_range_field(self.min_ttl, self.ttl),
             "olen": self.olen,
-            "mss": self.set_ternary_field(self.mss, 16),
-            "wsize": self.set_ternary_field(self.wsize, 16),
-            "wsize_div_mss": self.set_ternary_field(self.wsize_div_mss, 16),
-            "scale": self.set_ternary_field(self.scale, 8),
+            "mss": _set_ternary_field(self.mss, 16),
+            "wsize": _set_ternary_field(self.wsize, 16),
+            "wsize_div_mss": _set_ternary_field(self.wsize_div_mss, 16),
+            "scale": _set_ternary_field(self.scale, 8),
             "olayout": self.olayout,
-            "quirk_df": self.set_ternary_field(self.quirk_df, 1),
-            "quirk_nz_id": self.set_ternary_field(self.quirk_nz_id, 1),
-            "quirk_zero_id": self.set_ternary_field(self.quirk_zero_id, 1),
-            "quirk_ecn": self.set_ternary_field(self.quirk_ecn, 1),
+            "quirk_df": _set_ternary_field(self.quirk_df, 1),
+            "quirk_nz_id": _set_ternary_field(self.quirk_nz_id, 1),
+            "quirk_zero_id": _set_ternary_field(self.quirk_zero_id, 1),
+            "quirk_ecn": _set_ternary_field(self.quirk_ecn, 1),
             "quirk_nz_mbz": self.quirk_nz_mbz,
             "quirk_zero_seq": self.quirk_zero_seq,
             "quirk_nz_ack": self.quirk_nz_ack,
@@ -83,142 +88,55 @@ class P0fRuleMatchFields(object):
         }
 
         # filter out None values (wildcard) and append prefix
-        formatted_dict = {(prefix+k): v \
+        formatted_dict = {(PREFIX+k): v \
                           for (k, v) in match_fields_dict.items() \
                           if v is not None}
 
         return formatted_dict
 
 
+# read fingerprint file and process signatures
+# then assign each signature a priority
+def get_signature_list():
+    signature_list = _read_fp_file()
+    _assign_priorities(signature_list)
+    return signature_list    
+
+
 # convert label id to label name
 def id_to_label(label_id):
-    read_fp_file()
+    _read_fp_file()  # TODO: is this necessary?
     return id_to_label_dict[label_id]
 
-        
-def read_fp_file():
-    # list of table entries
-    signature_list = []
+
+# assign priorities to each signature in signature list
+def _assign_priorities(signature_list):
+    # Base priorities
+    s_priority = 1  # Base priority for specific rules
+    g_priority = len(signature_list) + 1  # Base priority for generic rules
+    f_priority = 2*len(signature_list) + 1  # Base priority for fuzzy rules
     
-    # flag for when to start processing signatures
-    # we only want to process signatures under the "[tcp:request]" label
-    process_line = False
-    
-    # current OS label -- all signatures correspond to closest preceding OS 
-    # label in the fingerprint file
-    curr_label = ""
-    curr_label_id = -1
-
-    # read fingerprint file line-by-line
-    with open(FP_PATH) as f:
-        count = 0
-        for line in f:
-            # reached TCP SYN section: start processing signatures
-            if line.strip() == '[tcp:request]':
-                process_line = True
-                continue
-
-            # end of TCP SYN section: stop processing signatures
-            elif line.startswith('['):
-                process_line = False
-                continue
-
-            # not in TCP SYN section: do not process signatures
-            if not process_line:
-                continue
-
-            # separate comments
-            line_sep_comments = line.strip().split(';', 1)
-            # skip empty lines
-            if not len(line_sep_comments):
-                continue
-            if line_sep_comments[0] == '':
-                continue
-
-            # clean line
-            line_cleaned = line_sep_comments[0].strip()
-
-            # line contains label
-            if line_cleaned.startswith('label'):
-                line_sep_label = line_cleaned.split('=', 1)
-                if not len(line_sep_label):
-                    raise Exception('Malformed TCP SYN signature group label')
-                # store label
-                curr_label = line_sep_label[1].strip()
-                if not (curr_label.startswith('g:')
-                        or curr_label.startswith('s:')):
-                    raise Exception('Cannot determine if signature group label'
-                                    'is specific or generic')
-                curr_label_id += 1
-                id_to_label_dict[curr_label_id] = curr_label
-
-            # line contains 'sys': describes expected operating systems for this
-            # particular application label
-            elif line_cleaned.startswith('sys'):
-                line_sep_sys = line_cleaned.split('=', 1)
-                if not len(line_sep_sys):
-                    raise Exception('Malformed TCP SYN signature group sys')
-                # append to label
-                curr_label += '/{}'.format(line_sep_sys[1].strip())
-
-            # line contains signature
-            elif line_cleaned.startswith('sig'):
-                (match_fields, bad_ttl) = process_match_fields(line_cleaned)
-                if match_fields:
-                    # append signature object
-                    sig_object = P0fSignature(curr_label,
-                                              curr_label_id,
-                                              match_fields)
-                    signature_list.append(sig_object)
-
-                    # check if we can add a fuzzy object
-                    if (not sig_object.is_generic  # specific signature
-                        and ((match_fields.quirk_df == 1
-                              or match_fields.quirk_nz_id == 1
-                              or match_fields.quirk_zero_id == 0
-                              or match_fields.quirk_ecn == 0)  # fuzzy match quirks
-                             or not bad_ttl)):  # fuzzy match ttl
-                        fuzzy_match_fields = deepcopy(match_fields)
-
-                        # set fuzzy quirks
-                        # disappearing 'df'
-                        fuzzy_match_fields.quirk_df = \
-                            None if fuzzy_match_fields.quirk_df == 1 else 0
-                        # disappearing 'id+'
-                        fuzzy_match_fields.quirk_nz_id = \
-                            None if fuzzy_match_fields.quirk_nz_id == 1 else 0
-                        # appearing 'id-'
-                        fuzzy_match_fields.quirk_zero_id = \
-                            None if fuzzy_match_fields.quirk_zero_id == 0 else 1
-                        # appearing 'ecn'
-                        fuzzy_match_fields.quirk_ecn = \
-                            None if fuzzy_match_fields.quirk_ecn == 0 else 1
-
-                        # set fuzzy ttl
-                        fuzzy_match_fields.ttl = 255
-                        fuzzy_match_fields.min_ttl = 0
-
-                        # append fuzzy signature
-                        fuzzy_sig_object = P0fSignature(curr_label,
-                                                        curr_label_id,
-                                                        fuzzy_match_fields,
-                                                        is_fuzzy=True)
-                        # signature_list.append(fuzzy_sig_object)
-
-            else:
-                raise Exception('Malformed line in TCP SYN section of '
-                                'fingerprint file')
-
-    return signature_list
+    for sig in signature_list:
+        # Determine priority
+        if sig.is_generic:
+            sig.priority = g_priority
+            g_priority += 1
+        elif sig.is_fuzzy:
+            sig.priority = f_priority
+            f_priority += 1
+        else:
+            sig.priority = s_priority
+            s_priority += 1
 
 
-def process_match_fields(line_cleaned):
+# process one p0f signature line
+def _process_match_fields(line_cleaned):
     # flag for if we have encountered a "bad_ttl"
     # (ttl ends in '-')
     bad_ttl = False
     
     line_sep_sig = line_cleaned.split('=', 1)
-    if not len(line_sep_sig):
+    if len(line_sep_sig) < 2:
         raise Exception('Malformed TCP SYN signature')
     
     # process signature
@@ -372,11 +290,143 @@ def process_match_fields(line_cleaned):
         
     return (match_fields, bad_ttl)
 
+# read in fingerprints from fingerprint database file
+# return list of P0fSignature objects
+def _read_fp_file():
+    # list of table entries
+    signature_list = []
+    
+    # flag for when to start processing signatures
+    # we only want to process signatures under the "[tcp:request]" label
+    process_line = False
+    
+    # current OS label -- all signatures correspond to closest preceding OS 
+    # label in the fingerprint file
+    curr_label = ""
+    curr_label_id = -1
+
+    # read fingerprint file line-by-line
+    with open(FP_PATH) as f:
+        count = 0
+        for line in f:
+            # reached TCP SYN section: start processing signatures
+            if line.strip() == '[tcp:request]':
+                process_line = True
+                continue
+
+            # end of TCP SYN section: stop processing signatures
+            elif line.startswith('['):
+                process_line = False
+                continue
+
+            # not in TCP SYN section: do not process signatures
+            if not process_line:
+                continue
+
+            # separate comments
+            line_sep_comments = line.strip().split(';', 1)
+            # skip empty lines
+            if len(line_sep_comments) < 1:
+                continue
+            if line_sep_comments[0] == '':
+                continue
+
+            # clean line
+            line_cleaned = line_sep_comments[0].strip()
+
+            # line contains label
+            if line_cleaned.startswith('label'):
+                line_sep_label = line_cleaned.split('=', 1)
+                if len(line_sep_label) < 2:
+                    raise Exception('Malformed TCP SYN signature group label')
+                # store label
+                curr_label = line_sep_label[1].strip()
+                if not (curr_label.startswith('g:')
+                        or curr_label.startswith('s:')):
+                    raise Exception('Cannot determine if signature group label'
+                                    'is specific or generic')
+                curr_label_id += 1
+                id_to_label_dict[curr_label_id] = curr_label
+
+            # line contains 'sys': describes expected operating systems for this
+            # particular application label
+            elif line_cleaned.startswith('sys'):
+                line_sep_sys = line_cleaned.split('=', 1)
+                if len(line_sep_sys) < 2:
+                    raise Exception('Malformed TCP SYN signature group sys')
+                # append to label
+                curr_label += '/{}'.format(line_sep_sys[1].strip())
+
+            # line contains signature
+            elif line_cleaned.startswith('sig'):
+                (match_fields, bad_ttl) = _process_match_fields(line_cleaned)
+                if match_fields:
+                    # append signature object
+                    sig_object = P0fSignature(curr_label,
+                                              curr_label_id,
+                                              match_fields)
+                    signature_list.append(sig_object)
+
+                    # check if we can add a fuzzy object
+                    if (not sig_object.is_generic  # specific signature
+                        and ((match_fields.quirk_df == 1
+                              or match_fields.quirk_nz_id == 1
+                              or match_fields.quirk_zero_id == 0
+                              or match_fields.quirk_ecn == 0)  # fuzzy match quirks
+                             or not bad_ttl)):  # fuzzy match ttl
+                        fuzzy_match_fields = deepcopy(match_fields)
+
+                        # set fuzzy quirks
+                        # disappearing 'df'
+                        fuzzy_match_fields.quirk_df = \
+                            None if fuzzy_match_fields.quirk_df == 1 else 0
+                        # disappearing 'id+'
+                        fuzzy_match_fields.quirk_nz_id = \
+                            None if fuzzy_match_fields.quirk_nz_id == 1 else 0
+                        # appearing 'id-'
+                        fuzzy_match_fields.quirk_zero_id = \
+                            None if fuzzy_match_fields.quirk_zero_id == 0 else 1
+                        # appearing 'ecn'
+                        fuzzy_match_fields.quirk_ecn = \
+                            None if fuzzy_match_fields.quirk_ecn == 0 else 1
+
+                        # set fuzzy ttl
+                        fuzzy_match_fields.ttl = None
+                        fuzzy_match_fields.min_ttl = None
+
+                        # append fuzzy signature
+                        fuzzy_sig_object = P0fSignature(curr_label,
+                                                        curr_label_id,
+                                                        fuzzy_match_fields,
+                                                        is_fuzzy=True)
+                        signature_list.append(fuzzy_sig_object)
+
+            else:
+                raise Exception('Malformed line in TCP SYN section of '
+                                'fingerprint file')
+
+    return signature_list
+
+
+# for use in P0fRuleMatchFields.as_dict
+def _set_range_field(min_value, max_value):
+    if (min_value is None) or (max_value is None):
+        return None
+    
+    return [min_value, max_value]
+
+
+# for use in P0fRuleMatchFields.as_dict
+def _set_ternary_field(value, size):
+    return None if (value is None) else [value, 2**size-1]
+
 
 def main():
-    signature_list = read_fp_file()
+    signature_list = get_signature_list()
     for sig in signature_list:
-        pprint.pprint(vars(sig))
+        sig_dict = vars(sig)
+        sig_dict['match_fields'] = sig.get_match_fields_dict()
+        pprint(sig_dict)
 
         
 if __name__ == '__main__':

@@ -65,39 +65,22 @@ def writeIpv4ForwardingRules(p4info_helper,
 
 def writeP0fRules(p4info_helper, sw):
     # Read signature list
-    sig_list = read_fp.read_fp_file()
+    sig_list = read_fp.get_signature_list()
 
-    # Base priorities
-    s_priority = 1  # Base priority for specific rules
-    g_priority = len(sig_list) + 1  # Base priority for generic rules
-    f_priority = 2*len(sig_list) + 1  # Base priority for fuzzy rules
-    
     # Iterate over all signatures in order
     # Signatures appearing earlier are assigned higher priorities
     for sig in sig_list:
-        # Determine priority
-        sig_priority = 0
-        if sig.is_generic:
-            sig_priority = g_priority
-            g_priority += 1
-        elif sig.is_fuzzy:
-            sig_priority = f_priority
-            f_priority += 1
-        else:
-            sig_priority = s_priority
-            s_priority += 1
-
         # Create table entry
         # All fields in sig object belong to the p0f_metadata struct
         match_field_prefix = 'meta.p0f_metadata.'
         table_entry = p4info_helper.buildTableEntry(
             table_name="MyIngress.result_match",
-            match_fields=sig.match_fields.as_dict(prefix=match_field_prefix),
+            match_fields=sig.get_match_fields_dict(),
             action_name="MyIngress.set_result",
             action_params={
                 "result": sig.label_id
             },
-            priority=sig_priority
+            priority=sig.priority
         )
 
         # Write table entry

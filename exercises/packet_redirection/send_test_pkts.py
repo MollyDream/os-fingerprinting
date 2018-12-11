@@ -30,9 +30,11 @@ def send_pkt(sig, addr, iface):
     print("Process signature: {}".format(sig.label))
     
     # ignore sig.ver field: only IPv4 supported
-
     # choose TTL from range
-    rand_ttl = random.randint(sig.min_ttl, sig.ttl)
+    if sig.match_fields.min_ttl is None or sig.match_fields.ttl is None:
+        rand_ttl = random.randint(0, 255)
+    else:
+        rand_ttl = random.randint(sig.match_fields.min_ttl, sig.match_fields.ttl)
 
     # set up Ethernet packet
     pkt = Ether(src=get_if_hwaddr(iface), dst='ff:ff:ff:ff:ff:ff')
@@ -65,7 +67,7 @@ def main():
     iface = get_if()
 
     print("reading signature list")
-    signature_list = read_fp.read_fp_file()
+    signature_list = read_fp.get_signature_list()
     
     for sig in signature_list:
         if sig.is_generic:
