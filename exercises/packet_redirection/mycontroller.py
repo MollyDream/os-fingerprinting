@@ -3,7 +3,7 @@ import argparse
 import grpc
 import os
 import sys
-import read_fp
+from read_fp import P0fDatabaseReader
 from time import sleep
 from pprint import pprint
 
@@ -65,7 +65,8 @@ def writeIpv4ForwardingRules(p4info_helper,
 
 def writeP0fRules(p4info_helper, sw):
     # Read signature list
-    sig_list = read_fp.get_signature_list()
+    reader = P0fDatabaseReader()
+    sig_list = reader.get_signature_list()
 
     # Iterate over all signatures in order
     # Signatures appearing earlier are assigned higher priorities
@@ -73,8 +74,9 @@ def writeP0fRules(p4info_helper, sw):
         # Create table entry
         # All fields in sig object belong to the p0f_metadata struct
         match_field_prefix = 'meta.p0f_metadata.'
+        table_name = 'MyIngress.result_match'
         table_entry = p4info_helper.buildTableEntry(
-            table_name="MyIngress.result_match",
+            table_name=table_name,
             match_fields=sig.get_match_fields_dict(),
             action_name="MyIngress.set_result",
             action_params={
@@ -91,7 +93,7 @@ def writeP0fRules(p4info_helper, sw):
                       sig.label,
                       sig.label_id,
                       sw.name))
-        
+
     print("Installed all p0f rules on {}".format(sw.name))
 
 def readTableRules(p4info_helper, sw):
