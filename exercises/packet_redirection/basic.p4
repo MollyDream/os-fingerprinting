@@ -482,6 +482,7 @@ control MyIngress(inout headers hdr,
     }
     
     apply {
+<<<<<<< HEAD
 	/* only fingerprint TCP packets with SYN flag set
 	 * and ACK, RST, FIN not set
 	 */
@@ -573,6 +574,142 @@ control MyIngress(inout headers hdr,
 
 	if (hdr.ipv4.isValid()) {
 	    /* IPv4 forwarding */
+=======
+        // Only fingerprint TCP packets with SYN flag set and ACK, RST, FIN
+        // not set.
+        if (hdr.tcp.isValid()
+            && (hdr.tcp.ctrl == TYPE_SYN
+            || hdr.tcp.ctrl == TYPE_SYN_URG
+            || hdr.tcp.ctrl == TYPE_SYN_PSH
+            || hdr.tcp.ctrl == TYPE_SYN_URG_PSH)) {
+            
+            // Parse p0f signature fields.
+
+            /* for olen, mss, scale: see parser */
+            meta.p0f_metadata.ver = hdr.ipv4.version;  /* ver */    
+            meta.p0f_metadata.ttl = hdr.ipv4.ttl;      /* ttl */
+
+            /* wsize */
+            meta.p0f_metadata.wsize = hdr.tcp.window;
+
+            /* pclass */
+            bit<32> ip_header_length;
+            if (hdr.ipv4.isValid()) {
+                ip_header_length = 20 + (bit<32>) meta.p0f_metadata.olen;
+            } else {  // ipv6
+                ip_header_length = 40 + (bit<32>) meta.p0f_metadata.olen;
+            }
+            meta.p0f_metadata.pclass =
+                standard_metadata.packet_length    // length of whole packet
+                - 4 * (bit<32>) hdr.tcp.dataOffset // length of TCP header
+                - ip_header_length                 // length of IP header
+                - 14;                              // length of Ethernet header
+
+            /* quirks */
+            /* IP-specific quirks */
+            if (hdr.ipv4.flags & 0x02 != 0) {  // 010, 011
+                meta.p0f_metadata.quirk_df = 1;  /* df: "don't fragment" set */
+                if (hdr.ipv4.identification != 0) {
+                    meta.p0f_metadata.quirk_nz_id = 1;  /* id+: df set but IPID not zero */
+                }
+            } else {
+                if (hdr.ipv4.identification == 0) {
+                    meta.p0f_metadata.quirk_zero_id = 1;  /* id-: df not set but IPID zero */
+                }
+            }
+            if (hdr.ipv4.diffserv & 0x03 != 0) {
+                meta.p0f_metadata.quirk_ecn = 1;  /* ecn support */
+            }
+            if (hdr.ipv4.flags & 0x04 != 0) {  // 100, 101, 110, 111
+                meta.p0f_metadata.quirk_nz_mbz = 1;  /* 0+: "must be zero field" not zero */
+            }
+
+            /* TCP-specific quirks */
+            if (hdr.tcp.ecn & 0x03 != 0 || hdr.tcp.ecn & 0x04 != 0) {  // CWR and ECE flags both set, or only NS flag set
+                meta.p0f_metadata.quirk_ecn = 1;  /* ecn: explicit congestion notification support */
+            }
+
+            if (hdr.tcp.seqNo == 0) {
+                meta.p0f_metadata.quirk_zero_seq = 1;  /* seq-: sequence number is zero */
+            }
+            if (hdr.tcp.ctrl & 0x10 != 0) {
+                if (hdr.tcp.ackNo == 0) {
+                    meta.p0f_metadata.quirk_zero_ack = 1;  /* ack-: ACK flag set but ACK number is zero */
+                }
+            } else {
+                if (hdr.tcp.ackNo != 0 && hdr.tcp.ctrl & 0x04 == 0) {  // ignore illegal ack numbers for RST packets -- see p0f-3.09b:process.c:492
+                    meta.p0f_metadata.quirk_nz_ack = 1;  /* ack+: ACK flag not set but ACK number nonzero */
+                }
+            }
+            if (hdr.tcp.ctrl & 0x20 != 0) {
+                meta.p0f_metadata.quirk_urg = 1;  /* urgf+: URG flag set */
+            } else {
+                if (hdr.tcp.urgentPtr != 0) {
+                    meta.p0f_metadata.quirk_nz_urg = 1;  /* uptr+: URG pointer is non-zero, but URG flag not set */
+                }
+            }
+            if (hdr.tcp.ctrl & 0x08 != 0) {
+                meta.p0f_metadata.quirk_push = 1;  /* pushf+: PUSH flag used */
+            }
+
+            /* wsize_div_mss */
+            // Binary search for wsize_div_mss
+            // Invariant: wsize_div_mss must be between lo and hi
+            // Assume that wsize_div_mss can be no larger than 64
+            meta.binary_search.stop_flag = 0;  // Stop searching for wsize_div_mss
+
+            meta.binary_search.lo = 0;
+            meta.binary_search.lo_mss = 0;
+            meta.binary_search.hi = 1 << 6;  // 64
+            meta.binary_search.hi_mss 
+                = ((bit<22>) meta.p0f_metadata.mss) << 6;  // mss * 64
+
+            // Iter 0
+            // lo and hi are divisible by 64, so
+            // mid = (lo + hi) >> 1 = (lo + hi) / 2 
+            // is divisible by 32
+            binary_search_iter();
+
+            // Iter 1
+            // lo and hi are divisible by 32, so
+            // mid = (lo + hi) >> 1 = (lo + hi) / 2 
+            // is divisible by 16
+            binary_search_iter();
+
+            // Iter 2
+            // lo and hi are divisible by 16, so
+            // mid = (lo + hi) >> 1 = (lo + hi) / 2 
+            // is divisible by 8
+            binary_search_iter();
+
+            // Iter 3
+            // lo and hi are divisible by 8, so
+            // mid = (lo + hi) >> 1 = (lo + hi) / 2 
+            // is divisible by 4
+            binary_search_iter();
+
+            // Iter 4
+            // lo and hi are divisible by 4, so
+            // mid = (lo + hi) >> 1 = (lo + hi) / 2 
+            // is divisible by 2
+            binary_search_iter();
+
+            // Iter 5
+            // if wsize is divisible by mss, then
+            // wsize must be lo_mss, hi_mss, or mid_mss
+            binary_search_iter_final();
+
+            // Set p0f_result field.
+            result_match.apply();
+
+            // Clone packet while retaining p0f_result metadata.
+            // Egress pipeline will encapsulate cloned packet with p0f header.
+            clone3<p0f_result_t>(CloneType.I2E, MIRROR_SESSION_ID, meta.p0f_result);
+        }
+
+        if (hdr.ipv4.isValid()) {
+            /* IPv4 forwarding */
+>>>>>>> d1a24cb... fix ip flags quirks
             ipv4_lpm.apply();
 	}
     }
