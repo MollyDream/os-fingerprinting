@@ -566,7 +566,7 @@ control MyIngress(inout headers hdr,
 
             /* quirks */
             /* IP-specific quirks */
-            if (hdr.ipv4.flags > 0x01) {  // 010, 011
+            if (hdr.ipv4.flags & 0x02 != 0) {  // 010, 011
                 meta.p0f_metadata.quirk_df = 1;  /* df: "don't fragment" set */
                 if (hdr.ipv4.identification != 0) {
                     meta.p0f_metadata.quirk_nz_id = 1;  /* id+: df set but IPID not zero */
@@ -579,7 +579,7 @@ control MyIngress(inout headers hdr,
             if (hdr.ipv4.diffserv & 0x03 != 0) {
                 meta.p0f_metadata.quirk_ecn = 1;  /* ecn support */
             }
-            if (hdr.ipv4.flags > 0x03) {  // 100, 101, 110, 111
+            if (hdr.ipv4.flags & 0x04 != 0) {  // 100, 101, 110, 111
                 meta.p0f_metadata.quirk_nz_mbz = 1;  /* 0+: "must be zero field" not zero */
             }
 
