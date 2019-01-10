@@ -218,7 +218,7 @@ parser Tcp_option_parser(packet_in b,
         // size, can be at most 15, for a maximum TCP header length of
         // 15*4 = 60 bytes.
         verify(tcp_hdr_data_offset >= 5, error.TcpDataOffsetTooSmall);
-        tcp_hdr_bytes_left = 4 * (bit<9>) (tcp_hdr_data_offset - 5);
+        tcp_hdr_bytes_left = ((bit<9>) (tcp_hdr_data_offset - 5)) << 2;  // multiply data offset field by 4
         // always true here: 0 <= tcp_hdr_bytes_left <= 40
         transition next_option;
     }
@@ -275,7 +275,7 @@ parser Tcp_option_parser(packet_in b,
         /* set metadata field */
         meta.p0f_metadata.mss = b.lookahead<tcp_option_ss_t>().mss;
         tcp_hdr_bytes_left = tcp_hdr_bytes_left - 4;
-        b.extract(vec.next, 3*8);
+        b.extract(vec.next, 3 << 3);  // 3 bytes
         transition next_option;
     }
 
@@ -286,14 +286,14 @@ parser Tcp_option_parser(packet_in b,
         /* set excessive scale metadata field */
         meta.p0f_metadata.quirk_opt_exws = (bit<1>) (meta.p0f_metadata.scale > 14);    
         tcp_hdr_bytes_left = tcp_hdr_bytes_left - 3;
-        b.extract(vec.next, 2*8);
+        b.extract(vec.next, 2 << 3);  // 2 bytes
         transition next_option;
     }
 
     state parse_tcp_option_sack_permitted {
         verify(tcp_hdr_bytes_left >= 2, error.TcpOptionTooLongForHeader);
         tcp_hdr_bytes_left = tcp_hdr_bytes_left - 2;
-        b.extract(vec.next, 1*8);
+        b.extract(vec.next, 1 << 3);  // 1 byte
         transition next_option;
     }
 
@@ -309,7 +309,7 @@ parser Tcp_option_parser(packet_in b,
         verify(tcp_hdr_bytes_left >= (bit<9>) n_sack_bytes,
             error.TcpOptionTooLongForHeader);
         tcp_hdr_bytes_left = tcp_hdr_bytes_left - (bit<9>) n_sack_bytes;
-        b.extract(vec.next, (bit<32>) (8 * n_sack_bytes - 16));
+        b.extract(vec.next, (bit<32>) ((n_sack_bytes << 3) - 16));
         transition next_option;
     }
 
@@ -332,7 +332,7 @@ parser Tcp_option_parser(packet_in b,
         own_timestamp_seen = 1;
 
         tcp_hdr_bytes_left = tcp_hdr_bytes_left - 10;
-        b.extract(vec.next, 9*8);
+        b.extract(vec.next, 9 << 3);  // 9 bytes
         transition next_option;
     }
 }
@@ -359,11 +359,11 @@ parser MyParser(packet_in packet,
 
     state parse_ipv4 {
         packet.extract(hdr.ipv4);
-        /* calculate and store length of ip header */
-        ipv4_options_bytes = 4 * (bit<9>)(hdr.ipv4.ihl - 5);
+        /* calculate length of ip header */
+        ipv4_options_bytes = ((bit<9>)(hdr.ipv4.ihl - 5)) << 2;  // multiply ihl field by 4
         meta.p0f_metadata.olen = ipv4_options_bytes;
         /* extract ipv4 options */
-        packet.extract(hdr.ipv4_options, (bit<32>) (8 * ipv4_options_bytes));
+        packet.extract(hdr.ipv4_options, (bit<32>) (ipv4_options_bytes << 3));  // convert ipv4_options_bytes to bits
         transition select(hdr.ipv4.protocol) {
             TYPE_TCP: parse_tcp;
             default: accept;
@@ -556,10 +556,10 @@ control MyIngress(inout headers hdr,
             // IPv4 header length without options: 20 bytes
             ip_header_length = 20 + (bit<32>) meta.p0f_metadata.olen;
             bit<32> payload_length =
-                standard_metadata.packet_length    // length of whole packet
-                - 4 * (bit<32>) hdr.tcp.dataOffset // length of TCP header
-                - ip_header_length                 // length of IP header
-                - 14;                              // length of Ethernet header
+                standard_metadata.packet_length         // length of whole packet
+                - (((bit<32>) hdr.tcp.dataOffset) << 2) // length of TCP header
+                - ip_header_length                      // length of IP header
+                - 14;                                   // length of Ethernet header
 
             if (payload_length > 0) {
                 meta.p0f_metadata.pclass = 1;
