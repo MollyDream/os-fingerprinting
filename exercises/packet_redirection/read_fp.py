@@ -12,14 +12,33 @@ MAX_DIST = 35
 # Prefix for each metadata field in P4 file
 PREFIX = 'meta.p0f_metadata.'
 
-# Map integer ids to labels
-id_to_label_dict = {}
+class P0fDatabaseReader(object):
+    def __init__(self):
+        self.id_to_label_dict = {}  # For mapping an integer id to an OS label
+        self.sig_list = _read_fp_file(self.id_to_label_dict)
+        _assign_priorities(self.sig_list)
+
+    def get_signature_list(self):
+        '''
+        Get a list of complete P0fSignature objects from a fingerprint
+        database file.
+
+        :return: A list of P0fSignature objects.
+        '''
+        return self.sig_list
+
+    def id_to_label(self, id):
+        '''
+        :param: A string containing the name of a label
+        :return: An int containing the integer id of the label
+        '''
+        return self.id_to_label_dict[id]
 
 class P0fSignature(object):
     def __init__(self, label, label_id, match_fields, is_fuzzy=False):
         self.label = label
         self.label_id = label_id 
-	self.is_generic = True if label.startswith('g:') else False
+        self.is_generic = True if label.startswith('g:') else False
         self.is_fuzzy = is_fuzzy
         self.priority = 0
         self.match_fields = match_fields
@@ -101,28 +120,6 @@ class P0fRuleMatchFields(object):
                           if v is not None}
 
         return formatted_dict
-
-
-def get_signature_list():
-    '''
-    Get a list of complete P0fSignature objects from a fingerprint
-    database file.
-
-    :return: A list of P0fSignature objects:
-    '''
-    signature_list = _read_fp_file()
-    _assign_priorities(signature_list)
-    return signature_list    
-
-
-# convert label id to label name
-def id_to_label(label_id):
-    '''
-    :param: A string containing the name of a label
-    :return: An int containing the integer id of the label
-    '''
-    _read_fp_file()  # TODO: is this necessary?
-    return id_to_label_dict[label_id]
 
 
 def _assign_priorities(signature_list):
@@ -218,12 +215,16 @@ def _process_match_fields(line_cleaned):
             wsize_fields = wsize.split('*')
             if len(wsize_fields) != 2:
                 raise Exception('Malformed TCP SYN signature field: wsize')
-            elif wsize_fields[0] != 'mss' and wsize_fields[0] != 'mtu':
-                raise Exception('wsize cannot be a multiple of some'
-                                'value other than MSS or MTU')
+            elif wsize_fields[0] != 'mss':
+                if wsize_fields[0] == 'mtu':
+                    # TODO: write error message to log
+                    # 'Expressing wsize in the notation N*mtu, where N is'
+                    return None
+                    # 'a constant, is currently not supported'
+                else:
+                    raise Exception('wsize cannot be a multiple of some'
+                                    'value other than MSS or MTU')
             else:
-                # treat MTU as MSS 
-                # TODO: check p0f source code for how to handle MTU
                 match_fields.wsize_div_mss = int(wsize_fields[1])
         elif '%' in wsize:
             # the notation '%N', where N is a constant, is currently 
@@ -242,7 +243,7 @@ def _process_match_fields(line_cleaned):
         match_fields.scale = int(wsize_scale[1])
         
     # olayout
-    olayout = 0;
+    olayout = 0
     olayout_entries = sig_fields[5].split(',')
     for option in olayout_entries:
         olayout = olayout << 4
@@ -320,12 +321,13 @@ def _process_match_fields(line_cleaned):
         
     # pclass
     match_fields.pclass = int(sig_fields[7])
-        
+    
     return (match_fields, bad_ttl)
 
-def _read_fp_file():
+def _read_fp_file(id_to_label_dict):
     '''
-    Read in fingerprints from the fingerprint database file and return
+    Read in fingerprints from the fingerprint database file. Assign
+    an id to each operating system label in the database file. Return
     a list of P0fSignature objects.
     
     :return: A list of P0fSignature objects
@@ -396,8 +398,9 @@ def _read_fp_file():
 
             # line contains signature
             elif line_cleaned.startswith('sig'):
-                (match_fields, bad_ttl) = _process_match_fields(line_cleaned)
-                if match_fields:
+                res = _process_match_fields(line_cleaned)
+                if res:
+                    (match_fields, bad_ttl) = res
                     # append signature object
                     sig_object = P0fSignature(curr_label,
                                               curr_label_id,
@@ -476,7 +479,8 @@ def _set_ternary_field(value, size):
 
 
 def main():
-    signature_list = get_signature_list()
+    reader = P0fDatabaseReader()
+    signature_list = reader.get_signature_list()
     for sig in signature_list:
         sig_dict = vars(sig)
         sig_dict['match_fields'] = sig.get_match_fields_dict()
