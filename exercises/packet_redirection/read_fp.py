@@ -111,7 +111,7 @@ class P0fRuleMatchFields(object):
             "quirk_opt_eol_nz": self.quirk_opt_eol_nz,
             "quirk_opt_exws": self.quirk_opt_exws,
             "quirk_opt_bad": self.quirk_opt_bad,
-            "pclass": 0
+            "pclass": _set_ternary_field(self.pclass, 1)
         }
 
         # filter out None values (wildcard) and append prefix
@@ -320,7 +320,12 @@ def _process_match_fields(line_cleaned):
                             'fingerprint')
         
     # pclass
-    match_fields.pclass = int(sig_fields[7])
+    if sig_fields[7] == "0":
+        match_fields.pclass = 0
+    elif sig_fields[7] == "+":
+        match_fields.pclass = 1
+    else:  # wildcard
+        match_fields.pclass = None
     
     return (match_fields, bad_ttl)
 

@@ -68,7 +68,7 @@ header tcp_option_ss_t {
     bit<8> kind;
     bit<8> length;
     bit<16> mss;
-    }
+}
 
 header tcp_option_s_t {
     bit<8> kind;
@@ -146,7 +146,7 @@ struct p0f_metadata_t {
     bit<1> quirk_opt_exws;
     bit<1> quirk_opt_bad;  // currently not used because we just reject incorrectly-formatted packets
 
-    bit<32> pclass;
+    bit<1> pclass;
 }
 
 /* should match fields in p0f_t */
@@ -449,7 +449,7 @@ control MyIngress(inout headers hdr,
             meta.p0f_metadata.quirk_opt_eol_nz: exact;
             meta.p0f_metadata.quirk_opt_exws: exact;
             meta.p0f_metadata.quirk_opt_bad: exact;
-            meta.p0f_metadata.pclass: exact;
+            meta.p0f_metadata.pclass: ternary;
         }
         actions = {
             set_result;
@@ -553,16 +553,19 @@ control MyIngress(inout headers hdr,
 
             /* pclass */
             bit<32> ip_header_length;
-            if (hdr.ipv4.isValid()) {
-                ip_header_length = 20 + (bit<32>) meta.p0f_metadata.olen;
-            } else {  // ipv6
-                ip_header_length = 40 + (bit<32>) meta.p0f_metadata.olen;
-            }
-            meta.p0f_metadata.pclass =
+            // IPv4 header length without options: 20 bytes
+            ip_header_length = 20 + (bit<32>) meta.p0f_metadata.olen;
+            bit<32> payload_length =
                 standard_metadata.packet_length    // length of whole packet
                 - 4 * (bit<32>) hdr.tcp.dataOffset // length of TCP header
                 - ip_header_length                 // length of IP header
                 - 14;                              // length of Ethernet header
+
+            if (payload_length > 0) {
+                meta.p0f_metadata.pclass = 1;
+            } else {
+                meta.p0f_metadata.pclass = 0;
+            }
 
             /* quirks */
             /* IP-specific quirks */
