@@ -7,10 +7,9 @@ const bit<16> TYPE_IPV4 = 0x800;
 const bit<8> TYPE_TCP = 6;
 
 // TCP control field values
-const bit<6> TYPE_SYN = 0x02;          // 000010
-const bit<6> TYPE_SYN_URG = 0x22;      // 100010
-const bit<6> TYPE_SYN_PSH = 0x0A;      // 001010
-const bit<6> TYPE_SYN_URG_PSH = 0x2A;  // 101010
+const bit<6> SYN_FLAG = 1 << 1;
+const bit<6> PSH_FLAG = 1 << 3;
+const bit<6> URG_FLAG = 1 << 5;
 
 /*************************************************************************
 *********************** H E A D E R S  ***********************************
@@ -144,8 +143,9 @@ struct p0f_metadata_t {
     bit<1> quirk_opt_nz_ts2;
     bit<1> quirk_opt_eol_nz;
     bit<1> quirk_opt_exws;
-    bit<1> quirk_opt_bad;  // currently not used because we just reject incorrectly-formatted packets
-
+    // currently not used because we just reject 
+    // incorrectly-formatted packets
+    bit<1> quirk_opt_bad;
     bit<1> pclass;
 }
 
@@ -175,7 +175,8 @@ struct headers {
 
 /* 
 TCP options subparser
-Adapted from https://github.com/jafingerhut/p4-guide/blob/master/tcp-options-parser/tcp-options-parser2.p4
+Adapted from 
+https://github.com/jafingerhut/p4-guide/blob/master/tcp-options-parser/tcp-options-parser2.p4
 */
 /*
 Copyright 2017 Cisco Systems, Inc.
@@ -218,7 +219,8 @@ parser Tcp_option_parser(packet_in b,
         // size, can be at most 15, for a maximum TCP header length of
         // 15*4 = 60 bytes.
         verify(tcp_hdr_data_offset >= 5, error.TcpDataOffsetTooSmall);
-        tcp_hdr_bytes_left = ((bit<9>) (tcp_hdr_data_offset - 5)) << 2;  // multiply data offset field by 4
+        // multiply data offset field by 4
+        tcp_hdr_bytes_left = ((bit<9>) (tcp_hdr_data_offset - 5)) << 2;
         // always true here: 0 <= tcp_hdr_bytes_left <= 40
         transition next_option;
     }
@@ -236,11 +238,15 @@ parser Tcp_option_parser(packet_in b,
         bit<8> kind = b.lookahead<bit<8>>();
 
         /* update olayout metadata field */
-        meta.p0f_metadata.olayout = (bit<160>) meta.p0f_metadata.olayout << 4;
-        meta.p0f_metadata.olayout = meta.p0f_metadata.olayout + (bit<160>) kind;
+        meta.p0f_metadata.olayout = 
+            (bit<160>) meta.p0f_metadata.olayout << 4;
+        meta.p0f_metadata.olayout = 
+            meta.p0f_metadata.olayout + (bit<160>) kind;
 
         /* update quirk_opt_eol_nz field */
-        meta.p0f_metadata.quirk_opt_eol_nz = (bit<1>) (meta.p0f_metadata.quirk_opt_eol_nz != 0 || (eol_seen != 0 && kind != 0));
+        meta.p0f_metadata.quirk_opt_eol_nz = 
+            (bit<1>) (meta.p0f_metadata.quirk_opt_eol_nz != 0 
+                     || (eol_seen != 0 && kind != 0));
 
         /* transition on kind */
         transition select(kind) {
@@ -284,7 +290,8 @@ parser Tcp_option_parser(packet_in b,
         /* set scale metadata field */
         meta.p0f_metadata.scale = b.lookahead<tcp_option_s_t>().scale;
         /* set excessive scale metadata field */
-        meta.p0f_metadata.quirk_opt_exws = (bit<1>) (meta.p0f_metadata.scale > 14);    
+        meta.p0f_metadata.quirk_opt_exws = 
+            (bit<1>) (meta.p0f_metadata.scale > 14);    
         tcp_hdr_bytes_left = tcp_hdr_bytes_left - 3;
         b.extract(vec.next, 2 << 3);  // 2 bytes
         transition next_option;
@@ -299,10 +306,11 @@ parser Tcp_option_parser(packet_in b,
 
     state parse_tcp_option_sack {
         bit<8> n_sack_bytes = b.lookahead<tcp_option_sack_top_t>().length;
-        // I do not have global knowledge of all TCP SACK
+        // Comment from Andy Fingerhut's TCP options parser:
+        // "I do not have global knowledge of all TCP SACK
         // implementations, but from reading the RFC, it appears that
         // the only SACK option lengths that are legal are 2+8*n for
-        // n=1, 2, 3, or 4, so set an error if anything else is seen.
+        // n=1, 2, 3, or 4, so set an error if anything else is seen."
         verify(n_sack_bytes == 10 || n_sack_bytes == 18 ||
             n_sack_bytes == 26 || n_sack_bytes == 34,
             error.TcpBadSackOptionLength);
@@ -319,15 +327,16 @@ parser Tcp_option_parser(packet_in b,
 
         // set flag if own timestamp is zero
         meta.p0f_metadata.quirk_opt_zero_ts1 = (bit<1>) (
-            (own_timestamp_seen != 0 && meta.p0f_metadata.quirk_opt_zero_ts1 != 0) 
+            (own_timestamp_seen != 0 
+            && meta.p0f_metadata.quirk_opt_zero_ts1 != 0)
             || (own_timestamp_seen == 0 && tsval == 0)
-            );
+        );
 
         // set flag if peer timestamp is nonzero
         meta.p0f_metadata.quirk_opt_nz_ts2 = (bit<1>) (
-        meta.p0f_metadata.quirk_opt_nz_ts2 != 0 
+            meta.p0f_metadata.quirk_opt_nz_ts2 != 0 
             || (own_timestamp_seen != 0 && tsval != 0)
-            );
+        );
 
         own_timestamp_seen = 1;
 
@@ -360,10 +369,15 @@ parser MyParser(packet_in packet,
     state parse_ipv4 {
         packet.extract(hdr.ipv4);
         /* calculate length of ip header */
-        ipv4_options_bytes = ((bit<9>)(hdr.ipv4.ihl - 5)) << 2;  // multiply ihl field by 4
+         // multiply ihl field by 4
+        ipv4_options_bytes = ((bit<9>)(hdr.ipv4.ihl - 5)) << 2;
         meta.p0f_metadata.olen = ipv4_options_bytes;
         /* extract ipv4 options */
-        packet.extract(hdr.ipv4_options, (bit<32>) (ipv4_options_bytes << 3));  // convert ipv4_options_bytes to bits
+        // convert ipv4_options_bytes to bits
+        packet.extract(
+            hdr.ipv4_options, 
+            (bit<32>) (ipv4_options_bytes << 3)
+        );
         transition select(hdr.ipv4.protocol) {
             TYPE_TCP: parse_tcp;
             default: accept;
@@ -457,18 +471,7 @@ control MyIngress(inout headers hdr,
         size = 1024;
         default_action = set_result(255);
     }
-
-    table debug_table {
-        key = {
-            meta.p0f_metadata.wsize: exact;
-            meta.p0f_metadata.wsize_div_mss: exact;
-        }
-        actions = {
-            NoAction;
-        }
-        default_action = NoAction;
-    }
-
+    
     // lo and hi must be even
     action binary_search_iter() {
         if (meta.binary_search.stop_flag == 1) {
@@ -537,10 +540,10 @@ control MyIngress(inout headers hdr,
         // Only fingerprint TCP packets with SYN flag set and ACK, RST, FIN
         // not set.
         if (hdr.tcp.isValid()
-            && (hdr.tcp.ctrl == TYPE_SYN
-            || hdr.tcp.ctrl == TYPE_SYN_URG
-            || hdr.tcp.ctrl == TYPE_SYN_PSH
-            || hdr.tcp.ctrl == TYPE_SYN_URG_PSH)) {
+            && (hdr.tcp.ctrl == SYN_FLAG
+            || hdr.tcp.ctrl == (SYN_FLAG | PSH_FLAG)
+            || hdr.tcp.ctrl == (SYN_FLAG | URG_FLAG)
+            || hdr.tcp.ctrl == (SYN_FLAG | PSH_FLAG | URG_FLAG))) {
             
             // Parse p0f signature fields.
 
@@ -556,10 +559,10 @@ control MyIngress(inout headers hdr,
             // IPv4 header length without options: 20 bytes
             ip_header_length = 20 + (bit<32>) meta.p0f_metadata.olen;
             bit<32> payload_length =
-                standard_metadata.packet_length         // length of whole packet
-                - (((bit<32>) hdr.tcp.dataOffset) << 2) // length of TCP header
-                - ip_header_length                      // length of IP header
-                - 14;                                   // length of Ethernet header
+                standard_metadata.packet_length         // whole packet
+                - (((bit<32>) hdr.tcp.dataOffset) << 2) // TCP header
+                - ip_header_length                      // IP header
+                - 14;                                   // Ethernet header
 
             if (payload_length > 0) {
                 meta.p0f_metadata.pclass = 1;
@@ -570,55 +573,72 @@ control MyIngress(inout headers hdr,
             /* quirks */
             /* IP-specific quirks */
             if (hdr.ipv4.flags & 0x02 != 0) {  // 010, 011
-                meta.p0f_metadata.quirk_df = 1;  /* df: "don't fragment" set */
+                /* df: "don't fragment" set */ 
+                meta.p0f_metadata.quirk_df = 1;
                 if (hdr.ipv4.identification != 0) {
-                    meta.p0f_metadata.quirk_nz_id = 1;  /* id+: df set but IPID not zero */
+                    /* id+: df set but IPID not zero */
+                    meta.p0f_metadata.quirk_nz_id = 1;
                 }
             } else {
                 if (hdr.ipv4.identification == 0) {
-                    meta.p0f_metadata.quirk_zero_id = 1;  /* id-: df not set but IPID zero */
+                    /* id-: df not set but IPID zero */
+                    meta.p0f_metadata.quirk_zero_id = 1;
                 }
             }
             if (hdr.ipv4.diffserv & 0x03 != 0) {
-                meta.p0f_metadata.quirk_ecn = 1;  /* ecn support */
+                /* ecn support */
+                meta.p0f_metadata.quirk_ecn = 1;
             }
             if (hdr.ipv4.flags & 0x04 != 0) {  // 100, 101, 110, 111
-                meta.p0f_metadata.quirk_nz_mbz = 1;  /* 0+: "must be zero field" not zero */
+                /* 0+: "must be zero field" not zero */
+                meta.p0f_metadata.quirk_nz_mbz = 1;
             }
 
             /* TCP-specific quirks */
-            if (hdr.tcp.ecn & 0x03 != 0 || hdr.tcp.ecn & 0x04 != 0) {  // CWR and ECE flags both set, or only NS flag set
-                meta.p0f_metadata.quirk_ecn = 1;  /* ecn: explicit congestion notification support */
+             // CWR and ECE flags both set, or only NS flag set
+            if (hdr.tcp.ecn & 0x03 != 0 || hdr.tcp.ecn & 0x04 != 0) {
+                /* ecn: explicit congestion notification support */
+                meta.p0f_metadata.quirk_ecn = 1;
             }
 
             if (hdr.tcp.seqNo == 0) {
-                meta.p0f_metadata.quirk_zero_seq = 1;  /* seq-: sequence number is zero */
+                /* seq-: sequence number is zero */
+                meta.p0f_metadata.quirk_zero_seq = 1;
             }
             if (hdr.tcp.ctrl & 0x10 != 0) {
                 if (hdr.tcp.ackNo == 0) {
-                    meta.p0f_metadata.quirk_zero_ack = 1;  /* ack-: ACK flag set but ACK number is zero */
+                    /* ack-: ACK flag set but ACK number is zero */
+                    meta.p0f_metadata.quirk_zero_ack = 1;
                 }
             } else {
-                if (hdr.tcp.ackNo != 0 && hdr.tcp.ctrl & 0x04 == 0) {  // ignore illegal ack numbers for RST packets -- see p0f-3.09b:process.c:492
-                    meta.p0f_metadata.quirk_nz_ack = 1;  /* ack+: ACK flag not set but ACK number nonzero */
+                // ignore illegal ack numbers for RST packets
+                // see p0f-3.09b:process.c:492
+                if (hdr.tcp.ackNo != 0 && hdr.tcp.ctrl & 0x04 == 0) {
+                    /* ack+: ACK flag not set but ACK number nonzero */
+                    meta.p0f_metadata.quirk_nz_ack = 1;
                 }
             }
             if (hdr.tcp.ctrl & 0x20 != 0) {
-                meta.p0f_metadata.quirk_urg = 1;  /* urgf+: URG flag set */
+                /* urgf+: URG flag set */
+                meta.p0f_metadata.quirk_urg = 1;
             } else {
                 if (hdr.tcp.urgentPtr != 0) {
-                    meta.p0f_metadata.quirk_nz_urg = 1;  /* uptr+: URG pointer is non-zero, but URG flag not set */
+                    /* uptr+: URG pointer is non-zero, but URG flag not set */
+                    meta.p0f_metadata.quirk_nz_urg = 1;
                 }
             }
             if (hdr.tcp.ctrl & 0x08 != 0) {
-                meta.p0f_metadata.quirk_push = 1;  /* pushf+: PUSH flag used */
+                /* pushf+: PUSH flag used */
+                meta.p0f_metadata.quirk_push = 1;
             }
 
             /* wsize_div_mss */
             // Binary search for wsize_div_mss
             // Invariant: wsize_div_mss must be between lo and hi
             // Assume that wsize_div_mss can be no larger than 64
-            meta.binary_search.stop_flag = 0;  // Stop searching for wsize_div_mss
+
+            // Stop searching for wsize_div_mss
+            meta.binary_search.stop_flag = 0;  
 
             meta.binary_search.lo = 0;
             meta.binary_search.lo_mss = 0;
@@ -665,8 +685,10 @@ control MyIngress(inout headers hdr,
             result_match.apply();
 
             // Clone packet while retaining p0f_result metadata.
-            // Egress pipeline will encapsulate cloned packet with p0f header.
-            clone3<p0f_result_t>(CloneType.I2E, MIRROR_SESSION_ID, meta.p0f_result);
+            // Egress pipeline encapsulates cloned packet with p0f header.
+            // clone3<p0f_result_t>(
+            //     CloneType.I2E, MIRROR_SESSION_ID, 
+            //     meta.p0f_result);
         }
 
         if (hdr.ipv4.isValid()) {
@@ -691,9 +713,9 @@ control MyEgress(inout headers hdr,
 
     apply {
         /* if packet is cloned, add p0f header */
-        if (standard_metadata.instance_type == 1) {
-            add_p0f_header();
-        }
+        // if (standard_metadata.instance_type == 1) {
+        //     add_p0f_header();
+        // }
     }
 }
 
@@ -728,7 +750,7 @@ control MyComputeChecksum(inout headers hdr, inout metadata meta) {
 
 control MyDeparser(packet_out packet, in headers hdr) {
     apply {
-        packet.emit(hdr.p0f);
+        // packet.emit(hdr.p0f);
         packet.emit(hdr.ethernet);
         packet.emit(hdr.ipv4);
         packet.emit(hdr.ipv4_options);
