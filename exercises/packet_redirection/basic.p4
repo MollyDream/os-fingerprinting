@@ -176,7 +176,7 @@ struct headers {
 /* 
 TCP options subparser
 Adapted from 
-https://github.com/jafingerhut/p4-guide/blob/master/tcp-options-parser/tcp-options-parser2.p4
+https://github.com/jafingerhut/p4-guide/blob/f2b3fc6d02ddd0acec6afd7a38543c040defcb0b/tcp-options-parser/tcp-options-parser2.p4
 */
 /*
 Copyright 2017 Cisco Systems, Inc.
