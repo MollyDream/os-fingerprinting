@@ -55,14 +55,14 @@ class P0fSignature(object):
 class P0fRuleMatchFields(object):
     def __init__(self):
         self.ver = None
-        self.ttl = None
-        self.min_ttl = None
-        self.olen = None
+        self.ttl = 255
+        self.min_ttl = 0
+        self.olen = 0
         self.mss = None
         self.wsize = None
         self.wsize_div_mss = None
         self.scale = None
-        self.olayout = None
+        self.olayout = 0
         self.quirk_df = 0
         self.quirk_nz_id = 0
         self.quirk_zero_id = 0
