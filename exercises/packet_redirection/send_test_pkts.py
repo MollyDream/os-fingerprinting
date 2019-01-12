@@ -29,7 +29,12 @@ def get_if():
 
 def send_pkt(sig, addr, iface):
     print("Process signature: {}".format(sig.label))
+
+    ##### Ethernet #####
+    # set up Ethernet packet
+    pkt = Ether(src=get_if_hwaddr(iface), dst='ff:ff:ff:ff:ff:ff')
     
+    ######## IP ########        
     # ignore sig.ver field: only IPv4 supported
     # choose TTL from range
     if sig.match_fields.min_ttl is None or sig.match_fields.ttl is None:
@@ -37,11 +42,6 @@ def send_pkt(sig, addr, iface):
     else:
         rand_ttl = random.randint(sig.match_fields.min_ttl, sig.match_fields.ttl)        
 
-    ##### Ethernet #####
-    # set up Ethernet packet
-    pkt = Ether(src=get_if_hwaddr(iface), dst='ff:ff:ff:ff:ff:ff')
-    
-    ######## IP ########
     # IP options
     olen = sig.match_fields.olen
     ip_options = ""
@@ -176,7 +176,7 @@ def send_pkt(sig, addr, iface):
     )    
     
     print "sending on interface %s to %s" % (iface, str(addr))
-    pkt.show2()
+    # pkt.show2()
     sendp(pkt, iface=iface, verbose=False)
 
 
@@ -191,10 +191,20 @@ def main():
     print("reading signature list")
     reader = P0fDatabaseReader()
     signature_list = reader.get_signature_list()
+
+    # Send one "start" packet.
+    # Both p0f and basic.p4 will log the time at which fingerprinting
+    # this packet is completed.
+    # We use this time as the "start" time for measuring how long
+    # each application takes to fingerprint the subsequent packets.
+    send_pkt(signature_list[0], addr, iface)
     
-    print("building packets")
+    # Send N packets for each signature.
+    N = 100
+    print("building and sending packets")
     for sig in signature_list:
-        send_pkt(sig, addr, iface)
+        for _ in range(N):
+            send_pkt(sig, addr, iface)
 
 
 if __name__ == '__main__':
