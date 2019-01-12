@@ -10,7 +10,7 @@ import socket
 
 from scapy.all import sendp, send, get_if_list, get_if_hwaddr
 from scapy.all import Packet
-from scapy.all import Ether, IP, IPOption, TCP
+from scapy.all import Ether, IP, IPOption, TCP, Raw
 
 from read_fp import P0fDatabaseReader
 
@@ -173,7 +173,11 @@ def send_pkt(sig, addr, iface):
         urgptr=urg,
         options=tcp_options,
         window=wsize
-    )    
+    )
+
+    # set up packet payload, if necessary
+    if sig.match_fields.pclass:
+        pkt = pkt / Raw(load="packet data")
     
     print "sending on interface %s to %s" % (iface, str(addr))
     # pkt.show2()
