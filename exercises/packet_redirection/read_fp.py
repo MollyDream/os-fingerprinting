@@ -32,7 +32,10 @@ class P0fDatabaseReader(object):
         :param: A string containing the name of a label
         :return: An int containing the integer id of the label
         '''
-        return self.id_to_label_dict[id]
+        if id in self.id_to_label_dict:
+            return self.id_to_label_dict[id]
+        else:
+            return "???"
 
 class P0fSignature(object):
     def __init__(self, label, label_id, match_fields, is_fuzzy=False):
@@ -487,9 +490,10 @@ def main():
     reader = P0fDatabaseReader()
     signature_list = reader.get_signature_list()
     for sig in signature_list:
-        sig_dict = vars(sig)
-        sig_dict['match_fields'] = sig.get_match_fields_dict()
-        pprint(sig_dict)
+        # sig_dict = vars(sig)
+        # sig_dict['match_fields'] = sig.get_match_fields_dict()
+        # pprint(sig_dict)
+        print(sig.label_id)
 
         
 if __name__ == '__main__':

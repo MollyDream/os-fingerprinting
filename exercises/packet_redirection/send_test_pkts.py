@@ -202,11 +202,11 @@ def main():
     # this packet is completed.
     # We use this time as the "start" time for measuring how long
     # each application takes to fingerprint the subsequent packets.
-    pkts.append(build_pkt(signature_list[0], addr, iface))
+    # pkts.append(build_pkt(signature_list[0], addr, iface))
     
     # Build N packets for each signature.
     print("building packets")
-    N = 100
+    N = 5
     for sig in signature_list:
         for _ in range(N):
             print(sig.label)
@@ -219,7 +219,7 @@ def main():
 
     # Send packets individually
     # Sleep for wait_ms milliseconds between each send
-    wait_ms = 50
+    wait_ms = 500
     count = 0
     for pkt in pkts:
         time.sleep(wait_ms / 1000)
