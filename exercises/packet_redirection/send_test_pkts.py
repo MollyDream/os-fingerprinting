@@ -7,6 +7,7 @@
 import sys
 import random
 import socket
+import time
 
 from scapy.all import sendp, send, get_if_list, get_if_hwaddr
 from scapy.all import Packet
@@ -27,8 +28,8 @@ def get_if():
     return iface
 
 
-def send_pkt(sig, addr, iface):
-    print("Process signature: {}".format(sig.label))
+def build_pkt(sig, addr, iface):
+    # print("Process signature: {}".format(sig.label))
 
     ##### Ethernet #####
     # set up Ethernet packet
@@ -178,10 +179,8 @@ def send_pkt(sig, addr, iface):
     # set up packet payload, if necessary
     if sig.match_fields.pclass:
         pkt = pkt / Raw(load="packet data")
-    
-    print "sending on interface %s to %s" % (iface, str(addr))
-    # pkt.show2()
-    sendp(pkt, iface=iface, verbose=False)
+
+    return pkt
 
 
 def main():
@@ -196,19 +195,40 @@ def main():
     reader = P0fDatabaseReader()
     signature_list = reader.get_signature_list()
 
+    pkts = []
+
     # Send one "start" packet.
     # Both p0f and basic.p4 will log the time at which fingerprinting
     # this packet is completed.
     # We use this time as the "start" time for measuring how long
     # each application takes to fingerprint the subsequent packets.
-    send_pkt(signature_list[0], addr, iface)
+    pkts.append(build_pkt(signature_list[0], addr, iface))
     
-    # Send N packets for each signature.
+    # Build N packets for each signature.
+    print("building packets")
     N = 100
-    print("building and sending packets")
     for sig in signature_list:
         for _ in range(N):
-            send_pkt(sig, addr, iface)
+            print(sig.label)
+            pkts.append(build_pkt(sig, addr, iface))
+    print(len(pkts))
+
+    
+    # Send packets
+    print("sending packets")
+
+    # Send packets individually
+    # Sleep for wait_ms milliseconds between each send
+    wait_ms = 50
+    count = 0
+    for pkt in pkts:
+        time.sleep(wait_ms / 1000)
+        sendp(pkt, iface=iface, verbose=False)
+        print(count)
+        count += 1
+    
+    # Send packets in one batch
+    # sendp(pkts, iface=iface, verbose=True)
 
 
 if __name__ == '__main__':

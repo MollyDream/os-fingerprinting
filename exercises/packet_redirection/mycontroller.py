@@ -49,18 +49,18 @@ def writeIpv4ForwardingRules(p4info_helper,
     print "Installed ingress IPv4 forwarding rule on %s" % ingress_sw.name
 
     # (2) Egress rule
-    table_entry = p4info_helper.buildTableEntry(
-        table_name="MyIngress.ipv4_lpm",
-        match_fields={
-            "hdr.ipv4.dstAddr": (dst_ip_addr, 32)
-        },
-        action_name="MyIngress.ipv4_forward",
-        action_params={
-            "dstAddr": dst_eth_addr,
-            "port": egress_port
-        })
-    egress_sw.WriteTableEntry(table_entry)
-    print "Installed egress IPv4 forwarding rule on %s" % egress_sw.name
+    # table_entry = p4info_helper.buildTableEntry(
+    #     table_name="MyIngress.ipv4_lpm",
+    #     match_fields={
+    #         "hdr.ipv4.dstAddr": (dst_ip_addr, 32)
+    #     },
+    #     action_name="MyIngress.ipv4_forward",
+    #     action_params={
+    #         "dstAddr": dst_eth_addr,
+    #         "port": egress_port
+    #     })
+    # egress_sw.WriteTableEntry(table_entry)
+    # print "Installed egress IPv4 forwarding rule on %s" % egress_sw.name
 
 
 def writeP0fRules(p4info_helper, sw):
